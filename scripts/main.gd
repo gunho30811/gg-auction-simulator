@@ -714,14 +714,14 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 	court.pivot_offset = court.size * Vector2(0.5, 0.45)
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(dim, "color:a", 0.08, 0.6)
-	tw.tween_property(court, "scale", Vector2(1.14, 1.14), 6.0).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(court, "scale", Vector2(1.14, 1.14), 4.5).set_trans(Tween.TRANS_SINE)
 	_call("사건번호 %s — 개찰을 시작하겠습니다." % a["case_no"])
 	var case_voice := "res://assets/sfx/case_%d.mp3" % idx
-	var open_wait := 2.2
+	var open_wait := 1.5
 	if ResourceLoader.exists(case_voice):
 		voice_player.stream = load(case_voice)
 		voice_player.play()
-		open_wait = minf(voice_player.stream.get_length() + 0.4, 5.5)
+		open_wait = minf(voice_player.stream.get_length() + 0.2, 3.2)
 	else:
 		_voice("v_open")
 	_say("두구두구...")
@@ -735,12 +735,12 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 		if i == entries.size() - 1:
 			_call("마지막 봉투입니다.")
 			_voice("v_last")
-			await get_tree().create_timer(1.7).timeout
+			await get_tree().create_timer(0.8).timeout
 		_play("click")
 		_voice("v_rank%d" % clampi(rank, 1, 5))
 		_call("%d순위 — %s, %s!" % [rank, e["who"], fmt(int(e["amt"]))])
 		e["spr"] = _pop_char(e)
-		await get_tree().create_timer(1.5).timeout
+		await get_tree().create_timer(1.05).timeout
 
 	drum_player.stop()
 	var top: Dictionary = entries[entries.size() - 1]
@@ -765,7 +765,7 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 			var sad := spr.create_tween().set_parallel(true)
 			sad.tween_property(spr, "modulate", Color(0.5, 0.5, 0.58, 0.9), 0.45)
 			sad.tween_property(spr, "position:y", spr.position.y + 28.0, 0.55)
-	await get_tree().create_timer(2.6).timeout  # 스팅어(3.2초) 여운
+	await get_tree().create_timer(1.8).timeout  # 스팅어(3.2초) 여운
 
 	# UI 복귀 — 스프라이트 퇴장, 방청객 배경 복귀
 	for e in entries:
@@ -795,11 +795,11 @@ func _confirmation(bid: int) -> void:
 	busy = true
 	result.text = "\n[b]매각결정기일[/b] — 낙찰 7일 후, 법원이 매각허가 여부를 결정합니다.\n"
 	Juice.pop_in(result)
-	await get_tree().create_timer(1.4).timeout
+	await get_tree().create_timer(0.9).timeout
 	var ev := _roll_event("confirmation")
 	if ev.is_empty():
 		result.text += "매각허가결정 — 즉시항고 없이 확정되었습니다. 잔금(약 30일 내)을 준비하세요.\n"
-		await get_tree().create_timer(1.1).timeout
+		await get_tree().create_timer(0.8).timeout
 		_decision(bid)
 		return
 	_show_event(ev, bid, func() -> void: _decision(bid))
@@ -851,7 +851,7 @@ func _show_event(e: Dictionary, bid: int, next_cb: Callable) -> void:
 		_say(str(e["jiji"]))
 	var choices: Array = e.get("choices", [])
 	if choices.is_empty():
-		await get_tree().create_timer(2.4).timeout
+		await get_tree().create_timer(1.7).timeout
 		_apply_effects(e.get("effects", {}), bid, next_cb)
 		return
 	var defs: Array = []
@@ -1207,28 +1207,28 @@ func _pack_bid_env() -> void:
 	paper_panel.pivot_offset = paper_panel.size / 2.0
 	_play("swoosh")
 	var flip1 := paper_panel.create_tween()
-	flip1.tween_property(paper_panel, "scale:x", 0.03, 0.22).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
-	flip1.parallel().tween_property(paper_panel, "modulate", Color(0.8, 0.8, 0.85), 0.22)
+	flip1.tween_property(paper_panel, "scale:x", 0.03, 0.13).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	flip1.parallel().tween_property(paper_panel, "modulate", Color(0.8, 0.8, 0.85), 0.13)
 	await flip1.finished
 	form_front_box.visible = false
 	form_back_box.visible = true
 	var flip2 := paper_panel.create_tween()
-	flip2.tween_property(paper_panel, "scale:x", 1.0, 0.24).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	flip2.parallel().tween_property(paper_panel, "modulate", Color(0.94, 0.94, 0.96), 0.24)
+	flip2.tween_property(paper_panel, "scale:x", 1.0, 0.15).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	flip2.parallel().tween_property(paper_panel, "modulate", Color(0.94, 0.94, 0.96), 0.15)
 	await flip2.finished
-	await get_tree().create_timer(0.4).timeout
+	await get_tree().create_timer(0.18).timeout
 
 	# 2) 스르륵 — 반 접힌 채 소봉투와 함께 봉투 속으로 말려 들어감
 	_play("swoosh")
 	var tw := create_tween().set_parallel(true)
-	tw.tween_property(paper_panel, "rotation", TAU * 1.25, 0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
-	tw.tween_property(paper_panel, "scale", Vector2(0.04, 0.04), 0.8).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_IN)
-	tw.tween_property(paper_panel, "modulate:a", 0.0, 0.75)
+	tw.tween_property(paper_panel, "rotation", TAU * 1.25, 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tw.tween_property(paper_panel, "scale", Vector2(0.04, 0.04), 0.45).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_IN)
+	tw.tween_property(paper_panel, "modulate:a", 0.0, 0.42)
 	if small_env:
 		small_env.pivot_offset = small_env.size / 2.0
-		tw.tween_property(small_env, "rotation", -TAU, 0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
-		tw.tween_property(small_env, "scale", Vector2(0.04, 0.04), 0.8).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_IN)
-		tw.tween_property(small_env, "modulate:a", 0.0, 0.75)
+		tw.tween_property(small_env, "rotation", -TAU, 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+		tw.tween_property(small_env, "scale", Vector2(0.04, 0.04), 0.45).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_IN)
+		tw.tween_property(small_env, "modulate:a", 0.0, 0.42)
 	await tw.finished
 	paper_panel.visible = false
 	if small_env:
@@ -1254,29 +1254,29 @@ func _take_receipt_and_drop() -> void:
 	receipt.pivot_offset = Vector2(0, receipt.size.y)
 	receipt.position = big_env.position + Vector2(big_env.size.x * 0.12, -receipt.size.y * 0.5)
 	var wob := receipt.create_tween()
-	wob.tween_property(receipt, "rotation", -0.06, 0.09)
-	wob.tween_property(receipt, "rotation", 0.05, 0.09)
-	wob.tween_property(receipt, "rotation", -0.04, 0.08)
+	wob.tween_property(receipt, "rotation", -0.06, 0.06)
+	wob.tween_property(receipt, "rotation", 0.05, 0.06)
+	wob.tween_property(receipt, "rotation", -0.04, 0.05)
 	await wob.finished
 	_play("tear")
 	Juice.shake(big_env, 6.0, 0.18)
 	var rip := receipt.create_tween().set_parallel(true)
-	rip.tween_property(receipt, "rotation", -0.38, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	rip.tween_property(receipt, "position", receipt.position + Vector2(-45, -55), 0.16)
+	rip.tween_property(receipt, "rotation", -0.38, 0.11).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	rip.tween_property(receipt, "position", receipt.position + Vector2(-45, -55), 0.11)
 	await rip.finished
 	# 구석에 보관
 	var keep := receipt.create_tween().set_parallel(true)
-	keep.tween_property(receipt, "position", Vector2(30, form_layer.size.y - 150), 0.55).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
-	keep.tween_property(receipt, "rotation", -0.1, 0.55)
-	keep.tween_property(receipt, "scale", Vector2(0.72, 0.72), 0.55)
-	await get_tree().create_timer(0.6).timeout
+	keep.tween_property(receipt, "position", Vector2(30, form_layer.size.y - 150), 0.35).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
+	keep.tween_property(receipt, "rotation", -0.1, 0.35)
+	keep.tween_property(receipt, "scale", Vector2(0.72, 0.72), 0.35)
+	await get_tree().create_timer(0.35).timeout
 	# 입찰봉투 투함 (휘릭 기울며 낙하)
 	_play("swoosh")
 	big_env.pivot_offset = big_env.size / 2.0
 	var drop := big_env.create_tween().set_parallel(true)
-	drop.tween_property(big_env, "rotation", 0.5, 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	drop.tween_property(big_env, "position:y", big_env.position.y + 360.0, 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	drop.tween_property(big_env, "modulate:a", 0.0, 0.55)
+	drop.tween_property(big_env, "rotation", 0.5, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	drop.tween_property(big_env, "position:y", big_env.position.y + 360.0, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	drop.tween_property(big_env, "modulate:a", 0.0, 0.4)
 	await drop.finished
 	_play("stamp")
 	form_layer.queue_free()
@@ -1296,13 +1296,13 @@ func _quick_submit() -> void:
 	env.position = (size - env.size) / 2.0
 	Juice.pop_in(env)
 	_play("click")
-	await get_tree().create_timer(0.75).timeout
+	await get_tree().create_timer(0.45).timeout
 	_play("swoosh")
 	env.pivot_offset = env.size / 2.0
 	var drop := env.create_tween().set_parallel(true)
-	drop.tween_property(env, "rotation", 0.45, 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	drop.tween_property(env, "position:y", env.position.y + 320.0, 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	drop.tween_property(env, "modulate:a", 0.0, 0.5)
+	drop.tween_property(env, "rotation", 0.45, 0.38).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	drop.tween_property(env, "position:y", env.position.y + 320.0, 0.38).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	drop.tween_property(env, "modulate:a", 0.0, 0.38)
 	await drop.finished
 	env.queue_free()
 	_play("stamp")
@@ -1472,7 +1472,7 @@ func _settle_won(bid: int, evict_cost: int, evict_label: String, months: int) ->
 	lines.append("  [b]총 취득원가: %s[/b]" % fmt(bid + tot))
 	lines.append("  시세 매각: +%s" % fmt(market))
 	for line in lines:
-		await get_tree().create_timer(0.4).timeout
+		await get_tree().create_timer(0.18).timeout
 		_play("click")
 		result.text += line + "\n"
 	await get_tree().create_timer(0.5).timeout
@@ -1527,12 +1527,12 @@ func _second_bidder(bid: int, would_net: int) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(a["case_no"]) + 314
 	result.text += "\n차순위매수신고 접수 — 최고가매수인의 잔금 납부를 기다립니다...\n"
-	await get_tree().create_timer(1.6).timeout
+	await get_tree().create_timer(1.0).timeout
 	if rng.randf() < 0.15:
 		result.text += "[color=%s][b]최고가매수인이 잔금을 미납![/b][/color] 차순위인 내가 매수인 지위를 승계합니다.\n" % GOLD
 		_say("이런 일이 진짜 있어요! 이제 내 가격으로 이 물건을 삽니다.")
 		_play("correct")
-		await get_tree().create_timer(1.2).timeout
+		await get_tree().create_timer(0.8).timeout
 		_decision(bid)
 	else:
 		result.text += "최고가매수인이 잔금을 납부했습니다. 내 보증금은 약 40일 묶였다가 반환되었습니다.\n"
