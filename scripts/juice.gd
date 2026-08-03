@@ -62,3 +62,20 @@ static func count(node: Control, from: int, to: int, setter: Callable, dur := 0.
 	var tw := _tween_for(node, "_j_count")
 	tw.tween_method(func(v: float) -> void: setter.call(int(v)), float(from), float(to), dur) \
 		.set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
+
+
+## ★ 터지는 축하 연출
+static func stars_burst(parent: Control, origin: Vector2, amount := 12) -> void:
+	for i in amount:
+		var l := Label.new()
+		l.text = "★"
+		l.add_theme_color_override("font_color", Color("e0b95e"))
+		l.add_theme_font_size_override("font_size", 16 + (i % 3) * 10)
+		l.position = origin
+		l.z_index = 100
+		parent.add_child(l)
+		var dir := Vector2(randf_range(-1.0, 1.0), randf_range(-1.4, -0.3)).normalized() * randf_range(90, 240)
+		var tw := l.create_tween().set_parallel(true)
+		tw.tween_property(l, "position", origin + dir, 0.9).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
+		tw.tween_property(l, "modulate:a", 0.0, 0.9)
+		tw.chain().tween_callback(l.queue_free)

@@ -328,9 +328,11 @@ func _art_for(kind: String) -> String:
 
 
 func _view_caption() -> String:
-	if img_idx == 0:
-		return "일러스트 — 클릭해서 실사 보기" if views.size() > 1 else "일러스트"
-	return "실사 %d/%d (클릭해서 넘기기)" % [img_idx, views.size() - 1]
+	if views.size() == 1:
+		return "일러스트"
+	if img_idx == views.size() - 1:
+		return "일러스트 (클릭해서 처음으로)"
+	return "실사 %d/%d (클릭해서 넘기기)" % [img_idx + 1, views.size() - 1]
 
 
 func _next_photo() -> void:
@@ -372,9 +374,9 @@ func _show_auction() -> void:
 
 	img_idx = 0
 	views.clear()
-	views.append(_art_for(a.get("kind", "")))
 	for f in a.get("images", []):
-		views.append(IMG_DIR + f)
+		views.append(IMG_DIR + f)  # 실사 먼저 — 시각적 임팩트
+	views.append(_art_for(a.get("kind", "")))
 	photo.texture = _load_tex(views[0])
 	photo_caption.text = _view_caption()
 
@@ -541,6 +543,7 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 
 	for c in bidders_row.get_children():
 		c.queue_free()
+	var nicks: Array = ["강남 큰손", "이사비 전문 꾼", "첫 임장 새내기", "은퇴자금 방어전", "옆동네 중개사", "조용한 법인"]
 	var cards: Array = []
 	var amt_labels: Array = []
 	for e in entries:
@@ -553,7 +556,7 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 		av.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		card.add_child(av)
 		var who := Label.new()
-		who.text = "나" if e["mine"] else "입찰자"
+		who.text = "나" if e["mine"] else nicks[rng.randi() % nicks.size()]
 		who.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		who.add_theme_color_override("font_color", COL_GOLD if e["mine"] else COL_MUTED)
 		card.add_child(who)
@@ -572,6 +575,9 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 	_say("두구두구...")
 	await get_tree().create_timer(0.9).timeout
 	for i in entries.size():
+		if i == entries.size() - 1:
+			_say("마지막 봉투입니다...!")
+			await get_tree().create_timer(0.9).timeout
 		_play("click")
 		amt_labels[i].text = fmt(int(entries[i]["amt"]))
 		if entries[i]["mine"]:
@@ -647,10 +653,34 @@ func _pay_balance(bid: int) -> void:
 	_say("명도는 돈이냐 시간이냐의 선택이에요. 배당받는 임차인은 명도확인서가 필요해서 협상이 쉽죠.")
 	_actions([
 		{"label": "%s (%s)" % [opts[0]["label"], fmt(int(opts[0]["cost"]))], "primary": true,
-			"cb": func() -> void: _settle_won(bid, int(opts[0]["cost"]), opts[0]["label"], int(opts[0]["months"]))},
+			"cb": func() -> void: _negotiate(bid, opts)},
 		{"label": "%s (%s)" % [opts[1]["label"], fmt(int(opts[1]["cost"]))], "primary": false,
 			"cb": func() -> void: _settle_won(bid, int(opts[1]["cost"]), opts[1]["label"], int(opts[1]["months"]))},
 	])
+
+
+## 명도 협상 — 랜덤 사건: 점유자가 이사비 증액을 요구할 수 있다
+func _negotiate(bid: int, opts: Array) -> void:
+	var a: Dictionary = auctions[idx]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(a["case_no"]) + 77
+	var cost := int(opts[0]["cost"])
+	if cost > 0 and rng.randf() < 0.35:
+		var demand := int(cost * 1.8 / 10_000) * 10_000
+		result.text = "\n[b]협상 난항![/b] 점유자: \"이사비 [color=%s]%s[/color]는 주셔야 나갑니다.\"" % [GOLD, fmt(demand)]
+		Juice.pop_in(result)
+		_play("wrong")
+		_say("버티기에 들어갔네요. 여기서 밀리면 계속 올라가요. 어떻게 할까요?")
+		_actions([
+			{"label": "요구 수락 (%s)" % fmt(demand), "primary": false,
+				"cb": func() -> void: _settle_won(bid, demand, "이사비 협상 (증액 수락)", int(opts[0]["months"]) + 1)},
+			{"label": "협상 결렬 — 강제집행 (%s)" % fmt(int(opts[1]["cost"])), "primary": true,
+				"cb": func() -> void: _settle_won(bid, int(opts[1]["cost"]), opts[1]["label"], int(opts[1]["months"]))},
+		])
+		return
+	if cost > 0:
+		_say("점유자가 순순히 도장을 찍었어요. 협상 성공!")
+	_settle_won(bid, cost, opts[0]["label"], int(opts[0]["months"]))
 
 
 func _forfeit(bid: int) -> void:
@@ -702,6 +732,7 @@ func _settle_won(bid: int, evict_cost: int, evict_label: String, months: int) ->
 	_play("win" if net >= 0 else "lose")
 	if net >= 0:
 		get_tree().create_timer(0.7).timeout.connect(_play.bind("coin"))
+		Juice.stars_burst(self, Vector2(size.x * 0.62, size.y * 0.45))
 	_update_cash()
 	_say("낙~찰! 수익까지 완벽해요!" if net >= 0 else "낙찰은 됐지만 정산하면 손해예요. 인수 금액과 세금까지 계산했어야 해요!")
 	_finish_case(txt, "won", bid, net, net)
@@ -767,6 +798,10 @@ func _finish_case(txt: String, kind: String, bid: int, net: int, would_net: int)
 	var stars := int(inv) + int(ana) + int(fin)
 	stars_total += stars
 	txt += "\n판단 평가:  조사 %s   분석 %s   재무 %s" % [_star(inv), _star(ana), _star(fin)]
+	if stars == 3:
+		txt += "   [color=%s][b]— 완벽한 판단![/b][/color]" % GOLD
+		Juice.stars_burst(self, Vector2(size.x * 0.5, size.y * 0.6), 16)
+		_say("조사·분석·재무 전부 완벽! 이게 프로의 입찰이에요.")
 	result.text += txt
 	Juice.pop_in(result)
 	next_btn.visible = true
