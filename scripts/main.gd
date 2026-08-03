@@ -80,6 +80,7 @@ var big_env: PanelContainer
 var receipt: PanelContainer
 var form_front_box: VBoxContainer
 var form_back_box: VBoxContainer
+var form_btn_bar: HBoxContainer
 var next_btn: Button
 var speech: Label
 var frame_panel: PanelContainer
@@ -306,7 +307,7 @@ func _build_ui() -> void:
 	quiz_row = HBoxContainer.new()
 	quiz_row.add_theme_constant_override("separation", 8)
 	quiz_row.visible = false
-	scroll_box.add_child(quiz_row)
+	right.add_child(quiz_row)  # 스크롤 밖 고정 — 버튼이 밀려 안 보이는 문제 방지
 	for q in [["인수된다 (내가 떠안음)", true], ["소멸된다 (배당으로 정리)", false]]:
 		var b := Button.new()
 		b.text = q[0]
@@ -321,7 +322,7 @@ func _build_ui() -> void:
 	action_row = HBoxContainer.new()
 	action_row.add_theme_constant_override("separation", 8)
 	action_row.visible = false
-	scroll_box.add_child(action_row)
+	right.add_child(action_row)  # 스크롤 밖 고정
 
 	range_label = Label.new()
 	range_label.add_theme_color_override("font_color", COL_MUTED)
@@ -1084,11 +1085,10 @@ func _show_bid_form() -> void:
 
 	Juice.pop_in(paper_panel)
 
-	# 진행 버튼 — 종이 바로 아래 중앙
-	var btn_bar := HBoxContainer.new()
-	btn_bar.alignment = BoxContainer.ALIGNMENT_CENTER
-	btn_bar.add_theme_constant_override("separation", 12)
-	vwrap.add_child(btn_bar)
+	# 진행 버튼 — 항상 현재 대상물(종이/봉투) 바로 아래를 따라다님
+	form_btn_bar = HBoxContainer.new()
+	form_btn_bar.add_theme_constant_override("separation", 12)
+	form_layer.add_child(form_btn_bar)
 	form_cancel = Button.new()
 	form_cancel.text = "다시 쓰기"
 	_style_button(form_cancel, false)
@@ -1098,13 +1098,24 @@ func _show_bid_form() -> void:
 		bid_row.visible = true
 		range_label.visible = true
 		busy = false)
-	btn_bar.add_child(form_cancel)
+	form_btn_bar.add_child(form_cancel)
 	form_btn = Button.new()
 	form_btn.text = "도장 찍기"
 	_style_button(form_btn, true)
 	form_btn.pressed.connect(_on_form_btn)
-	btn_bar.add_child(form_btn)
+	form_btn_bar.add_child(form_btn)
+	await get_tree().process_frame
+	_place_form_btns_under(paper_panel)
 	_say("입찰가격은 수정하면 무효예요! 꼼꼼히 확인하고 도장 찍으세요.")
+
+
+func _place_form_btns_under(node: Control) -> void:
+	if form_btn_bar == null or node == null:
+		return
+	var r := node.get_global_rect()
+	form_btn_bar.position = Vector2(
+		clampf(r.position.x + r.size.x / 2.0 - form_btn_bar.size.x / 2.0, 12.0, size.x - form_btn_bar.size.x - 12.0),
+		minf(r.end.y + 14.0, size.y - form_btn_bar.size.y - 12.0))
 
 
 func _envelope_panel(bg: String, border: String, title: String, sub: String, tcol: String) -> PanelContainer:
@@ -1239,6 +1250,9 @@ func _pack_bid_env() -> void:
 	get_tree().create_timer(0.15).timeout.connect(func() -> void:
 		if big_env:
 			Juice.punch(big_env, 1.12))
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_place_form_btns_under(big_env)
 	form_btn.text = "수취증 받고 투함"
 	_say("사건번호가 안 보이게 접어서 찍개로 콱! 참, 봉투 뒷면엔 '절대로 풀칠 금지'라고 쓰여 있어요 ㅎㅎ")
 
@@ -1247,6 +1261,7 @@ func _take_receipt_and_drop() -> void:
 	if form_step != 3 or big_env == null:
 		return
 	form_step = 4
+	form_btn_bar.visible = false
 	# 수취증이 봉투 상단에 붙어 있다가 — 들썩들썩, 북— 찢어짐
 	receipt = _envelope_panel("efe7cf", "8a6f42", "입찰자용 수취증", "보증금 반환 시 제시 · 집행관 날인", "5a4326")
 	form_layer.add_child(receipt)
