@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="36" fill="#fdf3dc"/>
+  <ellipse cx="130" cy="90" rx="44" ry="19" fill="#ffffff"/>
+  <ellipse cx="390" cy="110" rx="38" ry="16" fill="#ffffff"/>
+  <circle cx="430" cy="80" r="30" fill="#f6cf6b"/>
+  <!-- 언덕 -->
+  <ellipse cx="256" cy="430" rx="240" ry="120" fill="#a8d18a"/>
+  <ellipse cx="256" cy="440" rx="180" ry="80" fill="#96c979"/>
+  <!-- 필지 경계 -->
+  <path d="M130 400 L 256 330 L 382 400 L 256 462 Z" fill="#d8ecc4" stroke="#7ba55e" stroke-width="6" stroke-dasharray="14 10" stroke-linejoin="round"/>
+  <!-- 나무 -->
+  <circle cx="150" cy="330" r="30" fill="#6faf59"/>
+  <rect x="144" y="345" width="12" height="30" rx="5" fill="#8f5e30"/>
+  <!-- 매각 표지판 (웃는 얼굴) -->
+  <rect x="286" y="270" width="120" height="80" rx="14" fill="#fff9e8" stroke="#e0b95e" stroke-width="6"/>
+  <rect x="338" y="350" width="14" height="60" rx="6" fill="#8f5e30"/>
+  <circle cx="322" cy="298" r="6" fill="#3a2e2a"/>
+  <circle cx="368" cy="298" r="6" fill="#3a2e2a"/>
+  <path d="M330 316 q 15 11 30 0" stroke="#c25a4a" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <ellipse cx="304" cy="312" rx="8" ry="4" fill="#ffb9a3" opacity="0.7"/>
+  <ellipse cx="386" cy="312" rx="8" ry="4" fill="#ffb9a3" opacity="0.7"/>
+  <!-- 꽃 -->
+  <circle cx="200" cy="420" r="7" fill="#e2607c"/><circle cx="220" cy="440" r="6" fill="#f6cf6b"/><circle cx="300" cy="432" r="6" fill="#e2607c"/>
+</svg>

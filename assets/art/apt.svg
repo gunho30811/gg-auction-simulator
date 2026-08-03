@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="36" fill="#fdf3dc"/>
+  <!-- 구름 -->
+  <ellipse cx="110" cy="90" rx="46" ry="20" fill="#ffffff"/>
+  <ellipse cx="150" cy="80" rx="30" ry="16" fill="#ffffff"/>
+  <ellipse cx="400" cy="120" rx="40" ry="17" fill="#ffffff"/>
+  <!-- 뒷동 -->
+  <rect x="300" y="150" width="120" height="290" rx="14" fill="#c9d6ea"/>
+  <g fill="#f4f8ff">
+    <rect x="318" y="175" width="24" height="24" rx="5"/><rect x="358" y="175" width="24" height="24" rx="5"/>
+    <rect x="318" y="220" width="24" height="24" rx="5"/><rect x="358" y="220" width="24" height="24" rx="5"/>
+    <rect x="318" y="265" width="24" height="24" rx="5"/><rect x="358" y="265" width="24" height="24" rx="5"/>
+    <rect x="318" y="310" width="24" height="24" rx="5"/><rect x="358" y="310" width="24" height="24" rx="5"/>
+  </g>
+  <!-- 앞동 (얼굴 있는 주인공) -->
+  <rect x="110" y="110" width="160" height="330" rx="16" fill="#aebfe0"/>
+  <rect x="110" y="110" width="160" height="34" rx="16" fill="#8fa5d1"/>
+  <g fill="#fff9e8">
+    <rect x="130" y="160" width="30" height="30" rx="6"/><rect x="175" y="160" width="30" height="30" rx="6"/><rect x="220" y="160" width="30" height="30" rx="6"/>
+    <rect x="130" y="210" width="30" height="30" rx="6"/><rect x="220" y="210" width="30" height="30" rx="6"/>
+    <rect x="130" y="260" width="30" height="30" rx="6"/><rect x="175" y="260" width="30" height="30" rx="6"/><rect x="220" y="260" width="30" height="30" rx="6"/>
+  </g>
+  <!-- 얼굴 -->
+  <circle cx="172" cy="360" r="7" fill="#3a2e2a"/>
+  <circle cx="212" cy="360" r="7" fill="#3a2e2a"/>
+  <path d="M180 378 q 12 10 24 0" stroke="#c25a4a" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <ellipse cx="150" cy="374" rx="9" ry="5" fill="#ffb9a3" opacity="0.7"/>
+  <ellipse cx="234" cy="374" rx="9" ry="5" fill="#ffb9a3" opacity="0.7"/>
+  <!-- 현관 -->
+  <rect x="172" y="400" width="38" height="40" rx="8" fill="#7a5a34"/>
+  <!-- 바닥·나무 -->
+  <rect x="40" y="436" width="432" height="20" rx="10" fill="#bcd9a0"/>
+  <circle cx="70" cy="410" r="26" fill="#96c979"/><rect x="65" y="420" width="10" height="24" rx="4" fill="#8f5e30"/>
+  <circle cx="452" cy="414" r="22" fill="#96c979"/><rect x="448" y="424" width="9" height="20" rx="4" fill="#8f5e30"/>
+</svg>

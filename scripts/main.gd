@@ -28,6 +28,7 @@ var busy := false
 # 물건별 조사 상태
 var quiz_state := 0  # 0=미응답 1=정답 2=오답
 var seen_tabs := {}
+var views: PackedStringArray = []  # 액자 표시 목록: [일러스트, 실사...]
 
 var sfx := {}
 var sfx_player: AudioStreamPlayer
@@ -45,6 +46,7 @@ var bid_row: HBoxContainer
 var bid_edit: LineEdit
 var bid_preview: Label
 var result: RichTextLabel
+var bidders_row: HBoxContainer
 var next_btn: Button
 var speech: Label
 
@@ -228,6 +230,12 @@ func _build_ui() -> void:
 		b.pressed.connect(_answer_quiz.bind(q[1]))
 		quiz_row.add_child(b)
 
+	bidders_row = HBoxContainer.new()
+	bidders_row.add_theme_constant_override("separation", 18)
+	bidders_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	bidders_row.visible = false
+	scroll_box.add_child(bidders_row)
+
 	result = _make_rich()
 	result.visible = false
 	scroll_box.add_child(result)
@@ -301,22 +309,37 @@ func _build_ui() -> void:
 	bubble.add_child(speech)
 
 
-func _load_tex(file: String) -> Texture2D:
-	var path := IMG_DIR + file
+func _load_tex(path: String) -> Texture2D:
 	if ResourceLoader.exists(path):
 		return load(path)
 	var img := Image.load_from_file(ProjectSettings.globalize_path(path))
 	return ImageTexture.create_from_image(img) if img else null
 
 
+## 물건 종류별 귀여운 일러스트
+func _art_for(kind: String) -> String:
+	if kind == "아파트":
+		return "res://assets/art/apt.svg"
+	if kind in ["다세대", "연립", "단독주택", "주택", "빌라"]:
+		return "res://assets/art/villa.svg"
+	if kind in ["상가", "오피스텔", "근린시설", "근린상가"]:
+		return "res://assets/art/shop.svg"
+	return "res://assets/art/land.svg"
+
+
+func _view_caption() -> String:
+	if img_idx == 0:
+		return "일러스트 — 클릭해서 실사 보기" if views.size() > 1 else "일러스트"
+	return "실사 %d/%d (클릭해서 넘기기)" % [img_idx, views.size() - 1]
+
+
 func _next_photo() -> void:
-	var imgs: Array = auctions[idx].get("images", [])
-	if imgs.size() < 2:
+	if views.size() < 2:
 		return
 	_play("click")
-	img_idx = (img_idx + 1) % imgs.size()
-	photo.texture = _load_tex(imgs[img_idx])
-	photo_caption.text = "사진 %d/%d (클릭해서 넘기기)" % [img_idx + 1, imgs.size()]
+	img_idx = (img_idx + 1) % views.size()
+	photo.texture = _load_tex(views[img_idx])
+	photo_caption.text = _view_caption()
 
 
 func _deposit(a: Dictionary) -> int:
@@ -348,9 +371,12 @@ func _show_auction() -> void:
 	seen_tabs = {}
 
 	img_idx = 0
-	var imgs: Array = a.get("images", [])
-	photo.texture = _load_tex(imgs[0]) if imgs.size() > 0 else null
-	photo_caption.text = ("사진 1/%d (클릭해서 넘기기)" % imgs.size()) if imgs.size() > 1 else ("" if imgs.size() == 1 else "사진 준비중")
+	views.clear()
+	views.append(_art_for(a.get("kind", "")))
+	for f in a.get("images", []):
+		views.append(IMG_DIR + f)
+	photo.texture = _load_tex(views[0])
+	photo_caption.text = _view_caption()
 
 	var age := ""
 	if a.get("built_date", "") != "":
@@ -373,6 +399,7 @@ func _show_auction() -> void:
 	bid_preview.text = ""
 	bid_row.visible = true
 	result.visible = false
+	bidders_row.visible = false
 	next_btn.visible = false
 	busy = false
 
@@ -483,7 +510,7 @@ func _on_bid() -> void:
 	_ceremony(bid, false)
 
 
-## 개찰 세리머니: 입찰봉투를 낮은 가격부터 하나씩 개봉
+## 개찰 세리머니: 경쟁 입찰자 아바타들이 낮은 금액부터 입찰가를 공개
 func _ceremony(my_bid: int, passed: bool) -> void:
 	busy = true
 	bid_row.visible = false
@@ -491,34 +518,70 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 	action_row.visible = false
 	var a: Dictionary = auctions[idx]
 	var actual := int(a["winning_bid"])
+	var n := maxi(int(a["bidder_count"]), 1)
 
-	var bids: Array = []
+	var others: Array = []
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(a["case_no"]) + 7
-	var n := maxi(int(a["bidder_count"]), 1)
 	for i in n - 1:
-		bids.append(int(rng.randf_range(float(int(a["min_price"])), float(actual)) / 10_000.0) * 10_000)
-	if n >= 2 and int(a.get("second_bid", 0)) > 0:
-		bids[0] = int(a["second_bid"])
-	bids.append(actual)
-	if not passed:
-		bids.append(my_bid)
-	bids.sort()
+		others.append(int(rng.randf_range(float(int(a["min_price"])), float(actual)) / 10_000.0) * 10_000)
+	if others.size() > 0 and int(a.get("second_bid", 0)) > 0:
+		others[0] = int(a["second_bid"])
+	others.append(actual)
+	others.sort()
+	while others.size() > 4:
+		others.pop_front()  # 화면엔 상위 4명만
 
-	result.text = "[b]개찰[/b] — 집행관이 입찰봉투를 개봉합니다. (응찰 %d명%s)\n" % [n, "" if passed else " + 나"]
+	var entries: Array = []
+	for i in others.size():
+		entries.append({"amt": others[i], "mine": false, "tex": "res://assets/art/bidder%d.svg" % ((i % 4) + 1)})
+	if not passed:
+		entries.append({"amt": my_bid, "mine": true, "tex": "res://assets/characters/jiji.svg"})
+	entries.sort_custom(func(x, y) -> bool: return x["amt"] < y["amt"])
+
+	for c in bidders_row.get_children():
+		c.queue_free()
+	var cards: Array = []
+	var amt_labels: Array = []
+	for e in entries:
+		var card := VBoxContainer.new()
+		card.alignment = BoxContainer.ALIGNMENT_CENTER
+		var av := TextureRect.new()
+		av.texture = load(e["tex"])
+		av.custom_minimum_size = Vector2(72, 72)
+		av.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		av.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		card.add_child(av)
+		var who := Label.new()
+		who.text = "나" if e["mine"] else "입찰자"
+		who.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		who.add_theme_color_override("font_color", COL_GOLD if e["mine"] else COL_MUTED)
+		card.add_child(who)
+		var amt := Label.new()
+		amt.text = "―"
+		amt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		card.add_child(amt)
+		bidders_row.add_child(card)
+		cards.append(card)
+		amt_labels.append(amt)
+	bidders_row.visible = true
+
+	result.text = "[b]개찰[/b] — 집행관이 입찰봉투를 낮은 금액부터 개봉합니다. (응찰 %d명%s%s)" % [
+		n, "" if passed else " + 나", ", 상위만 표시" if n > 4 else ""]
 	Juice.pop_in(result)
 	_say("두구두구...")
 	await get_tree().create_timer(0.9).timeout
-	for b in bids:
+	for i in entries.size():
 		_play("click")
-		if not passed and b == my_bid:
-			result.text += "  ▸ [color=%s][b]%s — 내 입찰![/b][/color]\n" % [GOLD, fmt(b)]
-		else:
-			result.text += "  ▸ %s\n" % fmt(b)
-		await get_tree().create_timer(0.55).timeout
+		amt_labels[i].text = fmt(int(entries[i]["amt"]))
+		if entries[i]["mine"]:
+			amt_labels[i].add_theme_color_override("font_color", COL_GOLD)
+		Juice.punch(cards[i])
+		await get_tree().create_timer(0.6).timeout
 	_play("gavel")
+	Juice.punch(cards[entries.size() - 1], 1.25)
 	Juice.shake(self)
-	await get_tree().create_timer(0.6).timeout
+	await get_tree().create_timer(0.7).timeout
 
 	if passed:
 		_settle_passed()
@@ -537,7 +600,8 @@ func _decision(bid: int) -> void:
 	var evict_min := mini(int(evict[0]["cost"]), int(evict[1]["cost"]))
 	var dep := _deposit(a)
 
-	var txt := "\n[color=%s][b]★ 최고가매수신고인![/b][/color] 내 입찰가: [b]%s[/b]\n\n" % [GOLD, fmt(bid)]
+	var txt := "\n[color=%s][b]★ 최고가매수신고인![/b][/color] 내 입찰가: [b]%s[/b]\n" % [GOLD, fmt(bid)]
+	txt += "[color=%s]감정가 %s | 최저가 %s[/color]\n\n" % [MUTED, fmt(int(a["appraisal_price"])), fmt(int(a["min_price"]))]
 	txt += "[b]잔금 납부 전 최종 점검[/b] (매각허가 후 약 40일 내 납부)\n"
 	txt += "  세금·등기 등 부대비용: %s\n" % fmt(tot)
 	txt += "  예상 명도비: %s~\n" % fmt(evict_min)
@@ -749,6 +813,7 @@ func _show_end() -> void:
 	bid_row.visible = false
 	quiz_row.visible = false
 	action_row.visible = false
+	bidders_row.visible = false
 	result.visible = false
 	next_btn.text = "다시 시작"
 	next_btn.visible = true

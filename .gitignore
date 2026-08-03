@@ -10,4 +10,9 @@ build/
 # 원본 PDF — 소유자/임차인 실명 포함(개인정보), 퍼블릭 저장소 제외
 data/raw_pdfs/
 
+# 내부 데이터·내부 API 연동 도구 — 퍼블릭 저장소 제외
+법원데이터*.csv
+*.csv
+tools_import/
+
 *.tmp

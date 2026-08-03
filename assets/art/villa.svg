@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="36" fill="#fdf3dc"/>
+  <ellipse cx="120" cy="95" rx="44" ry="19" fill="#ffffff"/>
+  <ellipse cx="395" cy="115" rx="38" ry="16" fill="#ffffff"/>
+  <!-- 몸체 (3층 빌라) -->
+  <rect x="140" y="170" width="230" height="270" rx="16" fill="#f2c9a8"/>
+  <!-- 지붕 -->
+  <path d="M120 180 L 256 96 L 392 180 Z" fill="#d97f6a"/>
+  <path d="M120 180 L 256 96 L 392 180" fill="none" stroke="#c26b57" stroke-width="10" stroke-linecap="round"/>
+  <!-- 창문 -->
+  <g fill="#fff9e8">
+    <rect x="165" y="200" width="38" height="34" rx="8"/><rect x="310" y="200" width="38" height="34" rx="8"/>
+    <rect x="165" y="255" width="38" height="34" rx="8"/><rect x="310" y="255" width="38" height="34" rx="8"/>
+  </g>
+  <!-- 얼굴 -->
+  <circle cx="232" cy="310" r="7" fill="#3a2e2a"/>
+  <circle cx="280" cy="310" r="7" fill="#3a2e2a"/>
+  <path d="M242 328 q 14 11 28 0" stroke="#c25a4a" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <ellipse cx="206" cy="324" rx="10" ry="5" fill="#ffb9a3" opacity="0.7"/>
+  <ellipse cx="306" cy="324" rx="10" ry="5" fill="#ffb9a3" opacity="0.7"/>
+  <!-- 현관 + 화분 -->
+  <rect x="234" y="376" width="44" height="64" rx="10" fill="#7a5a34"/>
+  <circle cx="272" cy="408" r="4" fill="#e0b95e"/>
+  <rect x="150" y="400" width="26" height="22" rx="6" fill="#c98a5b"/>
+  <circle cx="163" cy="392" r="12" fill="#96c979"/>
+  <rect x="336" y="400" width="26" height="22" rx="6" fill="#c98a5b"/>
+  <circle cx="349" cy="392" r="12" fill="#96c979"/>
+  <rect x="40" y="436" width="432" height="20" rx="10" fill="#bcd9a0"/>
+</svg>
