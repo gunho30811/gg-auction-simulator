@@ -19,9 +19,10 @@ func _initialize() -> void:
 		"최저가 버튼이 무효 입찰가를 만들면 안 됨")
 
 	# 낙찰 시나리오: 실제 낙찰가(3,150만)보다 높게 입찰
+	main.confirmation_override = "normal"  # 매각결정기일 랜덤 이벤트 고정
 	main.bid_edit.text = "5000"
 	main._on_bid()
-	await create_timer(24.0).timeout  # 개찰 세리머니 (사건번호+순위 음성 발표 포함)
+	await create_timer(27.0).timeout  # 개찰 세리머니 + 매각결정기일
 	assert(main.action_row.visible, "낙찰 후 잔금/포기 선택지가 보여야 함")
 
 	main.action_row.visible = false

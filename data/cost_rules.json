@@ -4,7 +4,16 @@
   "house_kinds": ["아파트", "다세대", "연립", "단독주택", "주택"],
 
   "bid_deposit_rate": 0.10,
-  "_bid_deposit": "매수신청보증금 = 최저매각가격의 10%. 잔금 미납(포기) 시 몰수",
+  "_bid_deposit": "매수신청보증금 = 최저매각가격의 10%. 잔금 미납(포기) 시 몰수 (민사집행규칙 63조)",
+
+  "confirmation_events": {
+    "_comment": "매각결정기일(낙찰 7일 후) 법률 이벤트 확률. 나머지는 정상 허가. withdraw=취하 동의 요청(민집 93조), appeal=즉시항고(129조), disallow=매각불허가(121·123조), damage=훼손 발견(127조 허가취소 사유)",
+    "withdraw": 0.10,
+    "appeal": 0.08,
+    "disallow": 0.06,
+    "damage": 0.06
+  },
+  "damage_market_factor": 0.92,
 
   "acquisition_tax": {
     "_comment": "취득세 (1주택자 유상취득 기준). 주택 6~9억 구간은 (가액×2/3억-3)% 누진 공식 적용",

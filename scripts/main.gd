@@ -35,6 +35,8 @@ var busy := false
 # 물건별 조사 상태
 var quiz_state := 0  # 0=미응답 1=정답 2=오답
 var seen_tabs := {}
+var market_factor := 1.0  # 훼손 감수 진행 시 시세 하락 반영
+var confirmation_override := ""  # 테스트용 강제 이벤트 (normal/withdraw/appeal/disallow/damage)
 var views: PackedStringArray = []  # 액자 표시 목록: [일러스트, 실사...]
 
 var sfx := {}
@@ -488,6 +490,7 @@ func _show_auction() -> void:
 	_update_cash()
 	quiz_state = 0
 	seen_tabs = {}
+	market_factor = 1.0
 
 	img_idx = 0
 	views.clear()
@@ -754,9 +757,83 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 	if passed:
 		_settle_passed()
 	elif my_bid > actual:
-		_decision(my_bid)
+		_confirmation(my_bid)
 	else:
 		_settle_lost(my_bid)
+
+
+## 매각결정기일 (낙찰 7일 후) — 허가 여부와 법률 이벤트
+func _confirmation(bid: int) -> void:
+	busy = true
+	var a: Dictionary = auctions[idx]
+	var ev := confirmation_override
+	if ev == "":
+		var rng := RandomNumberGenerator.new()
+		rng.seed = hash(a["case_no"]) + 991
+		var roll := rng.randf()
+		var probs: Dictionary = rules.get("confirmation_events", {})
+		var acc := 0.0
+		ev = "normal"
+		for k in ["withdraw", "appeal", "disallow", "damage"]:
+			acc += float(probs.get(k, 0.0))
+			if roll < acc:
+				ev = k
+				break
+
+	result.text = "\n[b]매각결정기일[/b] — 낙찰 7일 후, 법원이 매각허가 여부를 결정합니다.\n"
+	Juice.pop_in(result)
+	await get_tree().create_timer(1.4).timeout
+
+	match ev:
+		"withdraw":
+			result.text += "[color=orange]채무자가 빚을 갚고 경매 취하를 요청했습니다![/color]\n매각기일 이후의 취하에는 [b]최고가매수신고인(나)의 동의[/b]가 필요합니다 (민사집행법 제93조).\n"
+			_say("내가 동의 안 하면 취하 못 해요. 이 물건, 놓치기 아까운 물건인가요?")
+			_actions([
+				{"label": "취하 동의 (보증금 반환, 물건 포기)", "primary": false, "cb": func() -> void: _withdrawn(bid, "채무자 취하에 동의 — 보증금 전액 반환. 채무자는 집을 지켰습니다.")},
+				{"label": "동의 거부 — 경매 계속", "primary": true, "cb": func() -> void: _decision(bid)},
+			])
+		"appeal":
+			result.text += "[color=orange]이해관계인이 즉시항고를 제기했습니다[/color] (민사집행법 제129조).\n심리 끝에 기각 — 하지만 잔금 일정이 약 2개월 지연되었습니다.\n"
+			_say("항고는 대부분 기각되지만, 시간이 그들의 무기예요. 기다림도 비용이죠.")
+			await get_tree().create_timer(2.2).timeout
+			_decision(bid)
+		"disallow":
+			result.text += "[color=salmon][b]매각불허가결정![/b][/color] 송달 누락 등 절차상 하자가 발견되었습니다 (민사집행법 제121·123조).\n보증금 %s은 전액 반환되며, 이 물건은 새매각 절차를 밟습니다.\n" % fmt(_deposit(a))
+			_say("황당하죠? 실전에서도 종종 있어요. 내 잘못이 아니라서 보증금은 돌려받습니다.")
+			_finish_case("", "disallowed", bid, 0, 0)
+		"damage":
+			result.text += "[color=orange]잔금 납부 전 현장 확인 중 부동산의 중대한 훼손을 발견![/color]\n이 경우 매각허가결정 취소를 신청할 수 있습니다 (민사집행법 제127조).\n"
+			_say("이럴 때를 위한 조문이 있어요. 취소하고 나올까요, 감수할까요?")
+			_actions([
+				{"label": "허가취소 신청 (보증금 반환)", "primary": false, "cb": func() -> void: _withdrawn(bid, "매각허가결정 취소 (127조) — 보증금 전액 반환.")},
+				{"label": "감수하고 진행 (시세 하락 감수)", "primary": true, "cb": func() -> void: _damage_proceed(bid)},
+			])
+		_:
+			result.text += "매각허가결정 — 즉시항고 없이 확정되었습니다. 잔금(약 30일 내)을 준비하세요.\n"
+			await get_tree().create_timer(1.1).timeout
+			_decision(bid)
+
+
+func _damage_proceed(bid: int) -> void:
+	market_factor = float(rules.get("damage_market_factor", 0.92))
+	_say("수리비만큼 싸게 산 셈 칠 수도 있죠. 정산에서 확인해봐요.")
+	_decision(bid)
+
+
+## 취하 동의·허가취소 등으로 매수인 지위가 소멸 (보증금 반환)
+func _withdrawn(bid: int, reason: String) -> void:
+	var a: Dictionary = auctions[idx]
+	var market := int(int(a["market_price"]) * market_factor)
+	var would_net := market - bid - CostCalc.total(CostCalc.breakdown(a, bid, rules)) \
+		- mini(int(CostCalc.eviction_options(a, rules)[0]["cost"]), int(CostCalc.eviction_options(a, rules)[1]["cost"]))
+	var txt := "\n[b]%s[/b]\n" % reason
+	if would_net < 0:
+		txt += "[color=lightgreen]결과적으로 잘된 일 — 진행했다면 약 %s 손해였을 물건입니다.[/color]\n" % fmt(would_net)
+		_play("correct")
+	else:
+		txt += "[color=salmon]아쉬움 — 진행했다면 약 +%s 수익이었을 물건입니다.[/color]\n" % fmt(would_net)
+		_play("lose")
+	_finish_case(txt, "withdrawn", bid, 0, would_net)
 
 
 func _call(msg: String) -> void:
@@ -874,7 +951,7 @@ func _forfeit(bid: int) -> void:
 	var a: Dictionary = auctions[idx]
 	var dep := _deposit(a)
 	cash -= dep
-	var market := int(a["market_price"])
+	var market := int(int(a["market_price"]) * market_factor)
 	var full_net := market - bid - CostCalc.total(CostCalc.breakdown(a, bid, rules)) \
 		- mini(int(CostCalc.eviction_options(a, rules)[0]["cost"]), int(CostCalc.eviction_options(a, rules)[1]["cost"]))
 	var good := full_net < -dep
@@ -896,7 +973,7 @@ func _settle_won(bid: int, evict_cost: int, evict_label: String, months: int) ->
 	var a: Dictionary = auctions[idx]
 	wins += 1
 	var items := CostCalc.breakdown(a, bid, rules)
-	var market := int(a["market_price"])
+	var market := int(int(a["market_price"]) * market_factor)
 	var tot := CostCalc.total(items) + evict_cost
 	var net := market - bid - tot
 	cash += net
@@ -940,8 +1017,43 @@ func _settle_lost(bid: int) -> void:
 	else:
 		txt += "[color=%s]실제 낙찰자 예상 손익: 약 +%s[/color]\n" % [MUTED, fmt(would_net)]
 		_say("%s만 더 썼으면 내 물건이었네요. 다음엔 분석 범위 상단을 노려봐요!" % fmt(diff))
+
+	# 차순위매수신고 자격: 내 입찰가 ≥ 최고가 − 보증금 (민사집행법 제114조)
+	var dep := _deposit(a)
+	if bid >= actual - dep and bid >= int(a["min_price"]):
+		txt += "\n[color=%s]내 입찰가가 '최고가 − 보증금' 이상 → 차순위매수신고 자격이 있습니다 (민사집행법 제114조).[/color]" % MUTED
+		result.text = txt
+		Juice.pop_in(result)
+		_play("lose")
+		_say("최고가매수인이 잔금을 안 내면 내 차례가 와요. 대신 그때까지 보증금이 묶입니다.")
+		_actions([
+			{"label": "차순위매수신고", "primary": false, "cb": func() -> void: _second_bidder(bid, would_net)},
+			{"label": "신고 안 함 (보증금 즉시 반환)", "primary": true,
+				"cb": func() -> void: _finish_case("\n차순위 신고 없이 종료 — 보증금은 즉시 반환됩니다.", "lost", bid, 0, would_net)},
+		])
+		return
 	_play("lose")
 	_finish_case(txt, "lost", bid, 0, would_net)
+
+
+## 차순위매수신고 결과 (민사집행법 114조): 최고가매수인 미납 시 지위 승계
+func _second_bidder(bid: int, would_net: int) -> void:
+	var a: Dictionary = auctions[idx]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(a["case_no"]) + 314
+	result.text += "\n차순위매수신고 접수 — 최고가매수인의 잔금 납부를 기다립니다...\n"
+	await get_tree().create_timer(1.6).timeout
+	if rng.randf() < 0.15:
+		result.text += "[color=%s][b]최고가매수인이 잔금을 미납![/b][/color] 차순위인 내가 매수인 지위를 승계합니다.\n" % GOLD
+		_say("이런 일이 진짜 있어요! 이제 내 가격으로 이 물건을 삽니다.")
+		_play("correct")
+		await get_tree().create_timer(1.2).timeout
+		_decision(bid)
+	else:
+		result.text += "최고가매수인이 잔금을 납부했습니다. 내 보증금은 약 40일 묶였다가 반환되었습니다.\n"
+		_say("아쉽지만 경험치! 실무에선 자금이 묶여서 차순위 신고를 잘 안 하기도 해요.")
+		_play("lose")
+		_finish_case("", "lost", bid, 0, would_net)
 
 
 func _settle_passed() -> void:
@@ -982,6 +1094,12 @@ func _finish_case(txt: String, kind: String, bid: int, net: int, would_net: int)
 		"forfeit":
 			ana = false
 			fin = would_net < -_deposit(a)
+		"withdrawn":
+			ana = would_net < 0
+			fin = would_net < 0
+		"disallowed":
+			ana = absf(bid - actual) <= actual * 0.10
+			fin = true
 	var stars := int(inv) + int(ana) + int(fin)
 	stars_total += stars
 	txt += "\n판단 평가:  조사 %s   분석 %s   재무 %s" % [_star(inv), _star(ana), _star(fin)]
