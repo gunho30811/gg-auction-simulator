@@ -9,6 +9,14 @@ const COL_MUTED := Color("9aa0b4")
 const CAPITALS := [[50_000_000, "5,000만원 (소액 도전)"], [200_000_000, "2억원 (실전형)"],
 	[500_000_000, "5억원 (여유형)"], [2_000_000_000, "20억원 (큰손)"]]
 
+# 대한민국 17개 시·도 (정식 명칭, 물건 주소 토큰)
+const SIDO := [["서울특별시", "서울"], ["부산광역시", "부산"], ["대구광역시", "대구"],
+	["인천광역시", "인천"], ["광주광역시", "광주"], ["대전광역시", "대전"],
+	["울산광역시", "울산"], ["세종특별자치시", "세종"], ["경기도", "경기"],
+	["강원특별자치도", "강원"], ["충청북도", "충북"], ["충청남도", "충남"],
+	["전북특별자치도", "전북"], ["전라남도", "전남"], ["경상북도", "경북"],
+	["경상남도", "경남"], ["제주특별자치도", "제주"]]
+
 var auctions: Array
 var taxonomy: Dictionary
 
@@ -141,7 +149,10 @@ func _region_path(depth: int) -> PackedStringArray:
 		var o: OptionButton = region_opts[i]
 		if o.selected <= 0:
 			break
-		path.append(o.get_item_text(o.selected))
+		if i == 0:
+			path.append(str(o.get_item_metadata(o.selected)))  # 시·도는 주소 토큰으로 매칭
+		else:
+			path.append(o.get_item_text(o.selected))
 	return path
 
 
@@ -152,6 +163,18 @@ func _refresh_region(from_level: int) -> void:
 		o.add_item("전체")
 		var prefix := _region_path(lv)
 		if prefix.size() < lv:
+			continue
+		if lv == 0:
+			# 17개 시·도 정식 명칭 + 보유 물건 수
+			for s in SIDO:
+				var cnt := 0
+				for a in auctions:
+					if str(a.get("address", "")).split(" ")[0] == s[1]:
+						cnt += 1
+				o.add_item("%s (%d건)" % [s[0], cnt])
+				o.set_item_metadata(o.get_item_count() - 1, s[1])
+				if cnt == 0:
+					o.set_item_disabled(o.get_item_count() - 1, true)
 			continue
 		var seen := {}
 		for a in auctions:
