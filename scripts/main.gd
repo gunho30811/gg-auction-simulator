@@ -667,10 +667,17 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(dim, "color:a", 0.08, 0.6)
 	tw.tween_property(court, "scale", Vector2(1.14, 1.14), 6.0).set_trans(Tween.TRANS_SINE)
-	_call("지금부터 %s 개찰을 시작하겠습니다." % a["case_no"])
-	_voice("v_open")
+	_call("사건번호 %s — 개찰을 시작하겠습니다." % a["case_no"])
+	var case_voice := "res://assets/sfx/case_%d.wav" % idx
+	var open_wait := 2.2
+	if ResourceLoader.exists(case_voice):
+		voice_player.stream = load(case_voice)
+		voice_player.play()
+		open_wait = voice_player.stream.get_length() + 0.4
+	else:
+		_voice("v_open")
 	_say("두구두구...")
-	await get_tree().create_timer(2.2).timeout
+	await get_tree().create_timer(open_wait).timeout
 
 	drum_player.stream = sfx["drumroll"]
 	drum_player.play()
