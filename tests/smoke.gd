@@ -24,9 +24,13 @@ func _initialize() -> void:
 	main._on_bid()  # 기일입찰표 열림
 	await process_frame
 	assert(main.form_layer != null, "기일입찰표가 표시되어야 함")
-	main._stamp()
-	main._submit_form()  # 접어서 투함 → 개찰
-	await create_timer(31.0).timeout  # 투함 연출 + 개찰 세리머니 + 매각결정기일
+	main._stamp()                 # 날인
+	main._on_form_btn()           # 보증금 봉투
+	await create_timer(0.5).timeout
+	main._on_form_btn()           # 입찰봉투
+	await create_timer(1.2).timeout
+	main._on_form_btn()           # 수취증 + 투함 → 개찰
+	await create_timer(33.0).timeout  # 투함 연출 + 개찰 세리머니 + 매각결정기일
 	assert(main.action_row.visible, "낙찰 후 잔금/포기 선택지가 보여야 함")
 
 	main.action_row.visible = false

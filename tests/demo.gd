@@ -12,6 +12,10 @@ func _initialize() -> void:
 	main.bid_edit.text = "5000"
 	main._on_bid()  # 기일입찰표 열림
 	await create_timer(1.2).timeout
-	main._stamp()   # 도장
-	await create_timer(2.5).timeout
-	main._submit_form()  # 투함 → 개찰 자동 진행
+	main._stamp()          # 날인
+	await create_timer(1.2).timeout
+	main._on_form_btn()    # 보증금 봉투
+	await create_timer(1.2).timeout
+	main._on_form_btn()    # 입찰봉투
+	await create_timer(1.4).timeout
+	main._on_form_btn()    # 수취증 + 투함 → 개찰 자동 진행

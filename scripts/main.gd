@@ -65,13 +65,18 @@ var call_bubble: PanelContainer
 var call_label: Label
 var sprite_layer: Control
 
-# 기일입찰표
+# 기일입찰표 (작성→보증봉투→입찰봉투→수취증→투함 5단계)
 var pending_bid := 0
 var stamped := false
+var form_step := 0
 var form_layer: Control
 var paper_panel: PanelContainer
 var stamp_node: PanelContainer
 var form_btn: Button
+var form_cancel: Button
+var small_env: PanelContainer
+var big_env: PanelContainer
+var receipt: PanelContainer
 var next_btn: Button
 var speech: Label
 var frame_panel: PanelContainer
@@ -966,6 +971,9 @@ func _make_stamp() -> PanelContainer:
 func _show_bid_form() -> void:
 	busy = true
 	stamped = false
+	form_step = 0
+	small_env = null
+	big_env = null
 	if form_layer:
 		form_layer.queue_free()
 	form_layer = Control.new()
@@ -1035,84 +1043,155 @@ func _show_bid_form() -> void:
 	box.add_child(_paper_label("※ 입찰가격은 수정할 수 없으므로, 수정을 요하는 때에는 새 용지를 사용하십시오.", 10))
 	box.add_child(_hline())
 
-	var btns := HBoxContainer.new()
-	btns.add_theme_constant_override("separation", 10)
-	box.add_child(btns)
-	var cancel := Button.new()
-	cancel.text = "다시 쓰기"
-	cancel.pressed.connect(func() -> void:
+	Juice.pop_in(paper_panel)
+
+	# 진행 버튼 (종이가 접혀도 남도록 form_layer 하단에 별도 배치)
+	var btn_bar := HBoxContainer.new()
+	btn_bar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	btn_bar.offset_top = -70
+	btn_bar.offset_bottom = -24
+	btn_bar.add_theme_constant_override("separation", 12)
+	form_layer.add_child(btn_bar)
+	form_cancel = Button.new()
+	form_cancel.text = "다시 쓰기"
+	_style_button(form_cancel, false)
+	form_cancel.pressed.connect(func() -> void:
 		form_layer.queue_free()
 		form_layer = null
 		busy = false)
-	btns.add_child(cancel)
-	var bs := Control.new()
-	bs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btns.add_child(bs)
+	btn_bar.add_child(form_cancel)
 	form_btn = Button.new()
 	form_btn.text = "도장 찍기"
 	_style_button(form_btn, true)
 	form_btn.pressed.connect(_on_form_btn)
-	btns.add_child(form_btn)
-
-	Juice.pop_in(paper_panel)
+	btn_bar.add_child(form_btn)
 	_say("입찰가격은 수정하면 무효예요! 꼼꼼히 확인하고 도장 찍으세요.")
 
 
+func _envelope_panel(bg: String, border: String, title: String, sub: String, tcol: String) -> PanelContainer:
+	var env := PanelContainer.new()
+	var es := StyleBoxFlat.new()
+	es.bg_color = Color(bg)
+	es.set_border_width_all(2)
+	es.border_color = Color(border)
+	es.set_content_margin_all(24)
+	es.shadow_size = 10
+	es.shadow_color = Color(0, 0, 0, 0.4)
+	env.add_theme_stylebox_override("panel", es)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 6)
+	env.add_child(v)
+	var t := Label.new()
+	t.text = title
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_color_override("font_color", Color(tcol))
+	t.add_theme_font_size_override("font_size", 19)
+	v.add_child(t)
+	if sub != "":
+		var s := Label.new()
+		s.text = sub
+		s.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		s.add_theme_color_override("font_color", Color(tcol))
+		s.add_theme_font_size_override("font_size", 12)
+		v.add_child(s)
+	var seal := _make_stamp()
+	seal.custom_minimum_size = Vector2(34, 34)
+	var seal_wrap := CenterContainer.new()
+	seal_wrap.add_child(seal)
+	v.add_child(seal_wrap)
+	return env
+
+
+func _center_in_form(node: Control, y_off := 0.0) -> void:
+	form_layer.add_child(node)
+	await get_tree().process_frame
+	node.position = (form_layer.size - node.size) / 2.0 + Vector2(0, y_off)
+	Juice.pop_in(node)
+
+
+## 실제 절차 (민사집행규칙·생활법령): 작성·날인 → 보증봉투 → 입찰봉투 → 수취증 → 투함
 func _on_form_btn() -> void:
-	if not stamped:
-		_stamp()
-	else:
-		_submit_form()
+	match form_step:
+		0:
+			_stamp()
+		1:
+			_pack_deposit_env()
+		2:
+			_pack_bid_env()
+		3:
+			_take_receipt_and_drop()
 
 
 func _stamp() -> void:
-	if stamped:
+	if form_step != 0:
 		return
+	form_step = 1
 	stamped = true
 	stamp_node.visible = true
 	Juice.pop_in(stamp_node)
 	Juice.shake(paper_panel, 5.0, 0.2)
 	_play("click")
-	if form_btn:
-		form_btn.text = "접어서 투함"
-	_say("쾅! 이제 접어서 입찰함에 넣으면 돌이킬 수 없어요.")
+	form_btn.text = "보증금 봉투에 담기"
+	form_cancel.visible = false  # 날인 후엔 돌이킬 수 없음
+	_say("쾅! 이제 보증금 수표를 흰 소봉투에 담아요.")
 
 
-func _submit_form() -> void:
-	if not stamped or form_layer == null:
+func _pack_deposit_env() -> void:
+	if form_step != 1:
 		return
-	busy = true
+	form_step = 2
 	_play("click")
+	var a: Dictionary = auctions[idx]
+	small_env = _envelope_panel("fdfcf7", "9a9a9a", "매수신청보증봉투",
+		"수표 %s 재중 · 봉함 후 날인" % fmt(_deposit(a)), "3a3a44")
+	_center_in_form(small_env, 40.0)
+	paper_panel.modulate.a = 0.55
+	form_btn.text = "입찰봉투에 넣기"
+	_say("흰 소봉투에 보증금 수표를 넣고 봉했어요. 이제 입찰표와 함께 큰 봉투로!")
+
+
+func _pack_bid_env() -> void:
+	if form_step != 2:
+		return
+	form_step = 3
+	_play("click")
+	# 입찰표·소봉투 접힘
 	paper_panel.pivot_offset = paper_panel.size / 2.0
-	var tw := create_tween()
-	tw.tween_property(paper_panel, "scale:y", 0.08, 0.32).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_IN)
-	tw.tween_property(paper_panel, "scale:x", 0.55, 0.2)
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(paper_panel, "scale:y", 0.06, 0.3).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_IN)
+	tw.tween_property(paper_panel, "modulate:a", 0.0, 0.3)
+	if small_env:
+		tw.tween_property(small_env, "modulate:a", 0.0, 0.3)
 	await tw.finished
-
-	var env := PanelContainer.new()
-	var es := StyleBoxFlat.new()
-	es.bg_color = Color("d9c9a4")
-	es.set_border_width_all(2)
-	es.border_color = Color("8a6f42")
-	es.set_content_margin_all(30)
-	es.shadow_size = 10
-	es.shadow_color = Color(0, 0, 0, 0.4)
-	env.add_theme_stylebox_override("panel", es)
-	var el := Label.new()
-	el.text = "입 찰 봉 투"
-	el.add_theme_color_override("font_color", Color("5a4326"))
-	el.add_theme_font_size_override("font_size", 20)
-	env.add_child(el)
-	form_layer.add_child(env)
 	paper_panel.visible = false
-	await get_tree().process_frame
-	env.position = (form_layer.size - env.size) / 2.0
-	Juice.pop_in(env)
-	await get_tree().create_timer(0.55).timeout
+	if small_env:
+		small_env.visible = false
+	big_env = _envelope_panel("e6d3a3", "8a6f42", "기 일 입 찰 봉 투",
+		"입찰표 + 보증봉투 재중 · 봉함 후 날인\n─ ─ ─ 절취선 (입찰자용 수취증) ─ ─ ─", "5a4326")
+	_center_in_form(big_env)
+	form_btn.text = "수취증 받고 투함"
+	_say("집행관이 절취선에 날인해줍니다. 수취증은 개찰 때까지 잘 보관하세요!")
 
-	var drop := env.create_tween().set_parallel(true)
-	drop.tween_property(env, "position:y", env.position.y + 320.0, 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	drop.tween_property(env, "modulate:a", 0.0, 0.55)
+
+func _take_receipt_and_drop() -> void:
+	if form_step != 3 or big_env == null:
+		return
+	form_step = 4
+	_play("click")
+	# 수취증 절취 — 화면 구석으로 이동해 보관
+	receipt = _envelope_panel("efe7cf", "8a6f42", "입찰자용 수취증", "사건번호 · 집행관 날인", "5a4326")
+	form_layer.add_child(receipt)
+	await get_tree().process_frame
+	receipt.position = big_env.position + Vector2(big_env.size.x * 0.55, -30)
+	Juice.pop_in(receipt)
+	var keep := receipt.create_tween().set_parallel(true)
+	keep.tween_property(receipt, "position", Vector2(30, form_layer.size.y - 140), 0.6).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
+	keep.tween_property(receipt, "scale", Vector2(0.75, 0.75), 0.6)
+	await get_tree().create_timer(0.65).timeout
+	# 입찰봉투 투함
+	var drop := big_env.create_tween().set_parallel(true)
+	drop.tween_property(big_env, "position:y", big_env.position.y + 340.0, 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	drop.tween_property(big_env, "modulate:a", 0.0, 0.55)
 	await drop.finished
 	_play("click")
 	form_layer.queue_free()
