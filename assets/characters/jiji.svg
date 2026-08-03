@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <clipPath id="badge"><circle cx="256" cy="256" r="240"/></clipPath>
+  </defs>
+
+  <!-- 배지 배경 -->
+  <circle cx="256" cy="256" r="240" fill="#fdf3dc"/>
+
+  <g clip-path="url(#badge)">
+    <!-- 몸통 (네이비 정장) -->
+    <path d="M256 296 C 172 296 128 356 122 512 L 390 512 C 384 356 340 296 256 296 Z" fill="#2e3a59"/>
+    <!-- 셔츠 -->
+    <path d="M256 300 L 226 322 L 256 400 L 286 322 Z" fill="#ffffff"/>
+    <!-- 리본 타이 -->
+    <circle cx="256" cy="330" r="9" fill="#d94f6b"/>
+    <path d="M256 330 L 232 316 L 236 344 Z" fill="#e2607c"/>
+    <path d="M256 330 L 280 316 L 276 344 Z" fill="#e2607c"/>
+    <!-- 옷깃 -->
+    <path d="M226 300 L 256 300 L 232 342 L 214 312 Z" fill="#243049"/>
+    <path d="M286 300 L 256 300 L 280 342 L 298 312 Z" fill="#243049"/>
+
+    <!-- 뒷머리 -->
+    <path d="M256 96 C 168 96 140 168 146 240 C 150 292 168 320 186 330 L 326 330 C 344 320 362 292 366 240 C 372 168 344 96 256 96 Z" fill="#5b4232"/>
+
+    <!-- 얼굴 -->
+    <circle cx="256" cy="218" r="88" fill="#ffe3cb"/>
+    <!-- 귀 -->
+    <circle cx="170" cy="222" r="14" fill="#ffe3cb"/>
+    <circle cx="342" cy="222" r="14" fill="#ffe3cb"/>
+
+    <!-- 앞머리 -->
+    <path d="M256 118 C 190 118 168 168 172 206 C 190 176 204 168 214 172 C 210 186 212 196 218 202 C 226 178 240 164 256 164 C 272 164 286 178 294 202 C 300 196 302 186 298 172 C 308 168 322 176 340 206 C 344 168 322 118 256 118 Z" fill="#6b4f3a"/>
+    <!-- 옆머리 -->
+    <path d="M170 210 C 162 238 164 274 178 298 C 188 288 192 262 190 236 Z" fill="#6b4f3a"/>
+    <path d="M342 210 C 350 238 348 274 334 298 C 324 288 320 262 322 236 Z" fill="#6b4f3a"/>
+
+    <!-- 눈 -->
+    <ellipse cx="224" cy="224" rx="11" ry="14" fill="#3a2e2a"/>
+    <ellipse cx="288" cy="224" rx="11" ry="14" fill="#3a2e2a"/>
+    <circle cx="228" cy="219" r="4" fill="#ffffff"/>
+    <circle cx="292" cy="219" r="4" fill="#ffffff"/>
+    <!-- 눈썹 -->
+    <path d="M210 200 q 14 -8 28 -2" stroke="#5b4232" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M274 198 q 14 -6 28 2" stroke="#5b4232" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <!-- 볼터치 -->
+    <ellipse cx="204" cy="252" rx="13" ry="8" fill="#ffb9a3" opacity="0.7"/>
+    <ellipse cx="308" cy="252" rx="13" ry="8" fill="#ffb9a3" opacity="0.7"/>
+    <!-- 입 -->
+    <path d="M240 260 q 16 14 32 0" stroke="#c25a4a" stroke-width="6" fill="none" stroke-linecap="round"/>
+
+    <!-- 팔 + 손 (의사봉 들기) -->
+    <path d="M330 320 C 356 306 372 286 378 262" stroke="#2e3a59" stroke-width="30" fill="none" stroke-linecap="round"/>
+    <circle cx="380" cy="256" r="19" fill="#ffe3cb"/>
+
+    <!-- 의사봉 -->
+    <g transform="rotate(-32 380 250)">
+      <rect x="374" y="176" width="12" height="80" rx="6" fill="#9a6a3a"/>
+      <rect x="346" y="152" width="68" height="34" rx="14" fill="#7a4f26"/>
+      <rect x="342" y="150" width="10" height="38" rx="5" fill="#8f5e30"/>
+      <rect x="410" y="150" width="10" height="38" rx="5" fill="#8f5e30"/>
+    </g>
+    <!-- 낙찰 효과선 -->
+    <path d="M436 128 l 14 -14 M448 160 l 18 -6 M420 106 l 6 -18" stroke="#e0a93e" stroke-width="7" stroke-linecap="round"/>
+  </g>
+
+  <!-- 배지 테두리 -->
+  <circle cx="256" cy="256" r="240" fill="none" stroke="#e0b95e" stroke-width="14"/>
+</svg>

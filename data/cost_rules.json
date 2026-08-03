@@ -1,0 +1,44 @@
+{
+  "_comment": "낙찰 후 발생 비용 규칙. 모든 수치는 지지옥션 검수 대상. rate는 낙찰가 대비 비율, amount는 원 단위 고정액.",
+
+  "house_kinds": ["아파트", "다세대", "연립", "단독주택", "주택"],
+
+  "acquisition_tax": {
+    "_comment": "취득세 (1주택자 유상취득 기준). 주택 6~9억 구간은 (가액×2/3억-3)% 누진 공식 적용",
+    "house_under_600m": 0.01,
+    "house_600m_to_900m": "progressive",
+    "house_over_900m": 0.03,
+    "non_house": 0.04
+  },
+
+  "local_edu_tax": {
+    "_comment": "지방교육세: 주택은 취득세율의 1/10, 비주택은 0.4%",
+    "house_factor_of_acq": 0.1,
+    "non_house_rate": 0.004
+  },
+
+  "rural_special_tax": {
+    "_comment": "농어촌특별세: 전용 85㎡ 초과 주택 및 비주택 0.2%, 85㎡ 이하 주택 면제",
+    "rate": 0.002,
+    "house_exempt_under_m2": 85.0
+  },
+
+  "registration_cost": {
+    "_comment": "법무사 보수 + 등기 부대비용 + 국민주택채권 할인 대략치",
+    "rate": 0.003,
+    "min_amount": 1000000
+  },
+
+  "eviction_cost": {
+    "_comment": "명도비용 추정 (이사비 협의 ~ 강제집행). 점유 유형별 기본값",
+    "공실": 0,
+    "소유자점유": 3000000,
+    "임차인점유": 2000000,
+    "유치권신고": 15000000
+  },
+
+  "stamp_tax": {
+    "_comment": "인지세 (1억 초과~10억 이하 15만원 구간을 기본값으로 단순화)",
+    "amount": 150000
+  }
+}

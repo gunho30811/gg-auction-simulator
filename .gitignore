@@ -1,0 +1,13 @@
+# Godot 캐시
+.godot/
+
+# 엔진 바이너리 (170MB) — README 참고해서 직접 다운로드
+tools/
+
+# 빌드 산출물
+build/
+
+# 원본 PDF — 소유자/임차인 실명 포함(개인정보), 퍼블릭 저장소 제외
+data/raw_pdfs/
+
+*.tmp
