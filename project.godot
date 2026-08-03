@@ -7,6 +7,10 @@ config/name="GG 경매 시뮬레이터"
 run/main_scene="res://scenes/title.tscn"
 config/features=PackedStringArray("4.7")
 
+[autoload]
+
+Game="*res://scripts/game_state.gd"
+
 [display]
 
 window/size/viewport_width=1280

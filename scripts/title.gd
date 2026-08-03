@@ -92,4 +92,4 @@ func _on_start() -> void:
 	player.play()
 	var tw := create_tween()
 	tw.tween_property(self, "modulate:a", 0.0, 0.45)
-	tw.tween_callback(func() -> void: get_tree().change_scene_to_file("res://scenes/main.tscn"))
+	tw.tween_callback(func() -> void: get_tree().change_scene_to_file("res://scenes/setup.tscn"))

@@ -64,9 +64,17 @@ B.cyl(0.12, 0.10, (-1.9, 5.06, 2.5), gold, vertices=48, rot=(math.radians(90), 0
 # 태극기 (단상 우측)
 B.cyl(0.035, 3.0, (1.9, 4.85, 1.5), B.material("pole", (0.75, 0.73, 0.70), rough=0.5), vertices=12)
 B.ball(0.06, (1.9, 4.85, 3.05), gold)
-B.box((0.85, 0.05, 0.55), (2.36, 4.82, 2.70), white, bevel=0.02)
-B.ball(0.11, (2.33, 4.77, 2.75), red, scale=(1, 0.4, 1))
-B.ball(0.11, (2.40, 4.77, 2.64), blue, scale=(1, 0.4, 1))
+flag_mat = bpy.data.materials.new("taegukgi")
+flag_mat.use_nodes = True
+_bsdf = flag_mat.node_tree.nodes["Principled BSDF"]
+_bsdf.inputs["Roughness"].default_value = 0.9
+_tex = flag_mat.node_tree.nodes.new("ShaderNodeTexImage")
+_tex.image = bpy.data.images.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), "taegukgi.png"))
+flag_mat.node_tree.links.new(_tex.outputs["Color"], _bsdf.inputs["Base Color"])
+bpy.ops.mesh.primitive_plane_add(size=1, location=(2.36, 4.80, 2.70), rotation=(math.radians(90), 0, 0))
+_flag = bpy.context.object
+_flag.scale = (0.85, 0.57, 1.0)
+_flag.data.materials.append(flag_mat)
 
 # 단상 (연단 + 꿀색 목재)
 B.box((7.0, 1.5, 0.35), (0, 3.4, 0.17), honey_dk, bevel=0.04)

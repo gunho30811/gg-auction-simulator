@@ -5,7 +5,8 @@ extends Control
 const START_CASH := 2_000_000_000
 const IMG_DIR := "res://data/images/"
 const SFX_NAMES := ["click", "gavel", "win", "lose", "correct", "wrong", "coin",
-	"nakchal", "drumroll", "v_open", "v_last", "v_rank1", "v_rank2", "v_rank3", "v_rank4", "v_rank5"]
+	"nakchal", "drumroll", "v_open", "v_last", "v_final",
+	"v_rank1", "v_rank2", "v_rank3", "v_rank4", "v_rank5"]
 
 # 개찰 리액션 캐릭터 (좌석 위치는 화면 비율 좌표, 발밑 기준)
 const CHAR_TEX := ["res://assets/art/char_bidder1.png", "res://assets/art/char_bidder2.png",
@@ -67,9 +68,14 @@ var frame_panel: PanelContainer
 
 func _ready() -> void:
 	auctions = JSON.parse_string(FileAccess.get_file_as_string("res://data/sample_auctions.json"))
+	var filtered: Array = Game.filter_auctions(auctions)
+	if not filtered.is_empty():
+		auctions = filtered
+	cash = Game.capital
+	cash_shown = cash
 	rules = JSON.parse_string(FileAccess.get_file_as_string("res://data/cost_rules.json"))
 	for n in SFX_NAMES:
-		sfx[n] = load("res://assets/sfx/%s.wav" % n)
+		sfx[n] = _load_sound(n)
 	sfx_player = AudioStreamPlayer.new()
 	sfx_player.volume_db = -4.0
 	add_child(sfx_player)
@@ -82,6 +88,14 @@ func _ready() -> void:
 	add_child(drum_player)
 	_build_ui()
 	_show_auction()
+
+
+func _load_sound(name: String) -> AudioStream:
+	for ext in ["wav", "mp3"]:
+		var p := "res://assets/sfx/%s.%s" % [name, ext]
+		if ResourceLoader.exists(p):
+			return load(p)
+	return null
 
 
 func _play(name: String) -> void:
@@ -498,7 +512,10 @@ func _show_auction() -> void:
 	quiz_row.visible = false
 	action_row.visible = false
 	_update_range()
-	_say("입찰 전 조사가 반이에요. 조사를 건너뛰면 분석 범위가 넓어서 감으로 쓰게 돼요!")
+	if idx == 0:
+		_say("알아두세요 — 입찰보증금은 '내 입찰가'가 아니라 '최저매각가격'의 10%예요 (민사집행규칙 63조). 얼마를 쓰든 보증금은 같답니다!")
+	else:
+		_say("입찰 전 조사가 반이에요. 조사를 건너뛰면 분석 범위가 넓어서 감으로 쓰게 돼요!")
 
 	bid_edit.clear()
 	bid_preview.text = ""
@@ -668,12 +685,12 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 	tw.tween_property(dim, "color:a", 0.08, 0.6)
 	tw.tween_property(court, "scale", Vector2(1.14, 1.14), 6.0).set_trans(Tween.TRANS_SINE)
 	_call("사건번호 %s — 개찰을 시작하겠습니다." % a["case_no"])
-	var case_voice := "res://assets/sfx/case_%d.wav" % idx
+	var case_voice := "res://assets/sfx/case_%d.mp3" % idx
 	var open_wait := 2.2
 	if ResourceLoader.exists(case_voice):
 		voice_player.stream = load(case_voice)
 		voice_player.play()
-		open_wait = voice_player.stream.get_length() + 0.4
+		open_wait = minf(voice_player.stream.get_length() + 0.4, 5.5)
 	else:
 		_voice("v_open")
 	_say("두구두구...")
@@ -697,7 +714,8 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 	drum_player.stop()
 	var top: Dictionary = entries[entries.size() - 1]
 	top["win"] = true
-	_play("nakchal")  # 땅!땅!땅! + "낙찰입니다! 축하합니다!" + 스팅어
+	_play("nakchal")  # 땅!땅!땅! + 스팅어
+	get_tree().create_timer(0.55).timeout.connect(_voice.bind("v_final"))  # "낙찰입니다! 축하합니다!"
 	Juice.shake(self, 10.0)
 	_call("낙찰입니다! 축하합니다, %s 님!" % top["who"])
 
@@ -987,7 +1005,7 @@ func _on_next() -> void:
 	_play("click")
 	if finished:
 		idx = 0
-		cash = START_CASH
+		cash = Game.capital
 		wins = 0
 		stars_total = 0
 		finished = false
@@ -1000,7 +1018,7 @@ func _on_next() -> void:
 
 func _show_end() -> void:
 	finished = true
-	var net := cash - START_CASH
+	var net := cash - Game.capital
 	var max_stars := auctions.size() * 3
 	var ratio := float(stars_total) / max_stars
 	var grade := "S" if ratio >= 0.8 else ("A" if ratio >= 0.6 else ("B" if ratio >= 0.4 else "C"))
