@@ -91,15 +91,35 @@ B.box((1.58, 0.10, 0.85), (4.6, 4.98, 2.5), screen, bevel=0.01)
 B.box((0.16, 0.35, 0.5), (-6.6, 2.5, 2.6), dark, bevel=0.02)
 B.box((0.16, 0.35, 0.5), (6.6, -2.0, 2.6), dark, bevel=0.02)
 
-# 방청석 의자 열 (꿀색 합판 의자 — 사람 없음)
+# 방청석 의자 열 (꿀색 합판 의자)
 def chair(x, y):
     B.box((0.56, 0.5, 0.06), (x, y, 0.46), honey, bevel=0.02)
-    B.box((0.56, 0.06, 0.55), (x, y + 0.26, 0.70), honey, bevel=0.02)
+    B.box((0.56, 0.06, 0.55), (x, y - 0.26, 0.70), honey, bevel=0.02)  # 등받이는 카메라 쪽
     B.box((0.5, 0.44, 0.4), (x, y, 0.22), honey_dk, bevel=0.03)
 
+SEATS = []
 for row_y in (0.4, -0.9):
     for cx in (-2.7, -1.5, -0.3, 0.9, 2.1, 3.3):
         chair(cx - 0.3, row_y)
+        SEATS.append((cx - 0.3, row_y))
+
+# 방청객 — 같이 개찰을 기다리는 입찰자들 (뒷모습, 좌석의 2/3 채움)
+import random
+random.seed(11)
+HAIRS = [(0.15, 0.13, 0.12), (0.35, 0.24, 0.16), (0.55, 0.42, 0.28),
+         (0.78, 0.78, 0.80), (0.10, 0.10, 0.12), (0.45, 0.30, 0.35)]
+SUITS = [(0.35, 0.48, 0.70), (0.63, 0.40, 0.42), (0.28, 0.40, 0.32),
+         (0.76, 0.53, 0.35), (0.50, 0.50, 0.55), (0.25, 0.28, 0.35), (0.85, 0.80, 0.70)]
+STYLES = ["short", "bob", "bun", "cap"]
+random.shuffle(SEATS)
+for i, (sx, sy) in enumerate(SEATS[:8]):
+    B.sd_character({"name": "crowd%d" % i, "hair": random.choice(HAIRS),
+                    "hair_style": random.choice(STYLES), "suit": random.choice(SUITS)},
+                   origin=(sx, sy + 0.05, 0.34), char_scale=0.78, face_dir=1)
+
+# 내 옆자리 아저씨 (전경, DOF 블러)
+B.sd_character({"name": "neighbor", "hair": (0.2, 0.17, 0.15), "hair_style": "cap",
+                "suit": (0.30, 0.33, 0.40)}, origin=(-1.7, -3.35, 0.30), char_scale=0.9, face_dir=1)
 
 # 내 앞줄 등받이 (착석 시점 전경 — DOF로 흐려짐)
 for cx in (-2.1, -0.9, 0.3, 1.5):
