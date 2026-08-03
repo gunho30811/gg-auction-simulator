@@ -19,6 +19,6 @@ blur = rgb.filter(ImageFilter.GaussianBlur(radius=img.width // 90))
 rgb = Image.blend(rgb, Image.composite(blur, rgb, blur.convert("L")), 0.25)
 
 out = Image.merge("RGBA", (*rgb.split(), img.split()[3]))
-out = out.resize((size, size), Image.LANCZOS)
+out = out.resize((size, max(1, round(size * img.height / img.width))), Image.LANCZOS)
 out.save(dst)
 print("POSTFX DONE:", dst)

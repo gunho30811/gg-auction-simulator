@@ -21,7 +21,7 @@ func _initialize() -> void:
 	# 낙찰 시나리오: 실제 낙찰가(3,150만)보다 높게 입찰
 	main.bid_edit.text = "5000"
 	main._on_bid()
-	await create_timer(4.5).timeout  # 개찰 세리머니
+	await create_timer(8.0).timeout  # 개찰 세리머니 (집행관 호명)
 	assert(main.action_row.visible, "낙찰 후 잔금/포기 선택지가 보여야 함")
 
 	main.action_row.visible = false

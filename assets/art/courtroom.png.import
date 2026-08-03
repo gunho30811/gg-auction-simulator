@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bqy32fofjo36c"
-path="res://.godot/imported/bidder3.svg-d864970eea5d1a2ba75c7dfb5f8a87d9.ctex"
+uid="uid://cg4ywnw7jqgna"
+path="res://.godot/imported/courtroom.png-39becf8d007bd8ca4c56c4910b5c87ef.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/bidder3.svg"
-dest_files=["res://.godot/imported/bidder3.svg-d864970eea5d1a2ba75c7dfb5f8a87d9.ctex"]
+source_file="res://assets/art/courtroom.png"
+dest_files=["res://.godot/imported/courtroom.png-39becf8d007bd8ca4c56c4910b5c87ef.ctex"]
 
 [params]
 
@@ -38,6 +38,3 @@ process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
 detect_3d/compress_to=1
-svg/scale=1.0
-editor/scale_with_editor_scale=false
-editor/convert_colors_with_editor_theme=false

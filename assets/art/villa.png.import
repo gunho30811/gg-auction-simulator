@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ddsnywnw57bpp"
-path="res://.godot/imported/bidder1.svg-6b530e564db925bb0c178e0ca7b006c6.ctex"
+uid="uid://kyptyn71fxcl"
+path="res://.godot/imported/villa.png-c00c43059c1a1e597c71e658a85b92d9.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/bidder1.svg"
-dest_files=["res://.godot/imported/bidder1.svg-6b530e564db925bb0c178e0ca7b006c6.ctex"]
+source_file="res://assets/art/villa.png"
+dest_files=["res://.godot/imported/villa.png-c00c43059c1a1e597c71e658a85b92d9.ctex"]
 
 [params]
 
@@ -38,6 +38,3 @@ process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
 detect_3d/compress_to=1
-svg/scale=1.0
-editor/scale_with_editor_scale=false
-editor/convert_colors_with_editor_theme=false

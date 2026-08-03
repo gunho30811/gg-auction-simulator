@@ -7,13 +7,16 @@ const COL_MUTED := Color("9aa0b4")
 
 
 func _ready() -> void:
-	var bg := ColorRect.new()
-	bg.color = COL_BG
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	var mat := ShaderMaterial.new()
-	mat.shader = load("res://assets/shaders/bg.gdshader")
-	bg.material = mat
-	add_child(bg)
+	var court := TextureRect.new()
+	court.texture = load("res://assets/art/courtroom.png")
+	court.set_anchors_preset(Control.PRESET_FULL_RECT)
+	court.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	court.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	add_child(court)
+	var dim := ColorRect.new()
+	dim.color = Color(0.04, 0.04, 0.07, 0.5)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(dim)
 
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -25,7 +28,7 @@ func _ready() -> void:
 	center.add_child(box)
 
 	var jiji := TextureRect.new()
-	jiji.texture = load("res://assets/characters/jiji.svg")
+	jiji.texture = load("res://assets/characters/jiji3d.png")
 	jiji.custom_minimum_size = Vector2(220, 220)
 	jiji.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	jiji.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED

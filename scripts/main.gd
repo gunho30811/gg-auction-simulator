@@ -46,7 +46,11 @@ var bid_row: HBoxContainer
 var bid_edit: LineEdit
 var bid_preview: Label
 var result: RichTextLabel
-var bidders_row: HBoxContainer
+var court: TextureRect
+var dim: ColorRect
+var content: HBoxContainer
+var call_bubble: PanelContainer
+var call_label: Label
 var next_btn: Button
 var speech: Label
 var frame_panel: PanelContainer
@@ -117,12 +121,17 @@ func _make_rich(font_size := 17) -> RichTextLabel:
 
 
 func _build_ui() -> void:
-	var shader_bg := ColorRect.new()
-	shader_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	var mat := ShaderMaterial.new()
-	mat.shader = load("res://assets/shaders/bg.gdshader")
-	shader_bg.material = mat
-	add_child(shader_bg)
+	# 1인칭 경매 법정 배경 (art_src/render_courtroom.py 렌더)
+	court = TextureRect.new()
+	court.texture = load("res://assets/art/courtroom.png")
+	court.set_anchors_preset(Control.PRESET_FULL_RECT)
+	court.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	court.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	add_child(court)
+	dim = ColorRect.new()
+	dim.color = Color(0.04, 0.04, 0.07, 0.6)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(dim)
 	_make_dust()
 
 	var panel := PanelContainer.new()
@@ -163,7 +172,7 @@ func _build_ui() -> void:
 	cash_label.add_theme_color_override("font_color", COL_GOLD)
 	cash_card.add_child(cash_label)
 
-	var content := HBoxContainer.new()
+	content = HBoxContainer.new()
 	content.add_theme_constant_override("separation", 20)
 	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(content)
@@ -240,12 +249,6 @@ func _build_ui() -> void:
 		b.pressed.connect(_answer_quiz.bind(q[1]))
 		quiz_row.add_child(b)
 
-	bidders_row = HBoxContainer.new()
-	bidders_row.add_theme_constant_override("separation", 18)
-	bidders_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	bidders_row.visible = false
-	scroll_box.add_child(bidders_row)
-
 	result = _make_rich()
 	result.visible = false
 	scroll_box.add_child(result)
@@ -303,7 +306,7 @@ func _build_ui() -> void:
 	footer.add_theme_constant_override("separation", 12)
 	root.add_child(footer)
 	var jiji := TextureRect.new()
-	jiji.texture = load("res://assets/characters/jiji.svg")
+	jiji.texture = load("res://assets/characters/jiji3d.png")
 	jiji.custom_minimum_size = Vector2(88, 88)
 	jiji.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	jiji.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -321,6 +324,26 @@ func _build_ui() -> void:
 	speech.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	speech.add_theme_color_override("font_color", Color("efe3c2"))
 	bubble.add_child(speech)
+
+	# 집행관 호명 말풍선 (단상 위, 개찰 때만)
+	var call_center := CenterContainer.new()
+	call_center.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	call_center.offset_top = 70
+	call_center.offset_bottom = 200
+	call_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(call_center)
+	call_bubble = PanelContainer.new()
+	var cb := _card(Color(0.08, 0.09, 0.14, 0.92), COL_GOLD, 18, 2)
+	cb.set_content_margin_all(20)
+	cb.content_margin_left = 34
+	cb.content_margin_right = 34
+	call_bubble.add_theme_stylebox_override("panel", cb)
+	call_bubble.visible = false
+	call_center.add_child(call_bubble)
+	call_label = Label.new()
+	call_label.add_theme_font_size_override("font_size", 30)
+	call_label.add_theme_color_override("font_color", Color("f5e6bd"))
+	call_bubble.add_child(call_label)
 
 
 ## 금가루 부유 파티클 — 공간에 깊이감
@@ -456,7 +479,6 @@ func _show_auction() -> void:
 	bid_preview.text = ""
 	bid_row.visible = true
 	result.visible = false
-	bidders_row.visible = false
 	next_btn.visible = false
 	busy = false
 
@@ -567,7 +589,7 @@ func _on_bid() -> void:
 	_ceremony(bid, false)
 
 
-## 개찰 세리머니: 경쟁 입찰자 아바타들이 낮은 금액부터 입찰가를 공개
+## 개찰 세리머니: UI가 걷히고 법정이 줌인 — 집행관이 단상에서 금액을 호명
 func _ceremony(my_bid: int, passed: bool) -> void:
 	busy = true
 	bid_row.visible = false
@@ -587,62 +609,50 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 	others.append(actual)
 	others.sort()
 	while others.size() > 4:
-		others.pop_front()  # 화면엔 상위 4명만
+		others.pop_front()  # 호명은 상위 4명만
 
+	var nicks: Array = ["강남 큰손", "이사비 전문 꾼", "첫 임장 새내기", "은퇴자금 방어전", "옆동네 중개사", "조용한 법인"]
 	var entries: Array = []
-	for i in others.size():
-		entries.append({"amt": others[i], "mine": false, "tex": "res://assets/art/bidder%d.svg" % ((i % 4) + 1)})
+	for amt in others:
+		entries.append({"amt": amt, "who": nicks[rng.randi() % nicks.size()], "mine": false})
 	if not passed:
-		entries.append({"amt": my_bid, "mine": true, "tex": "res://assets/characters/jiji.svg"})
+		entries.append({"amt": my_bid, "who": "나 (지지)", "mine": true})
 	entries.sort_custom(func(x, y) -> bool: return x["amt"] < y["amt"])
 
-	for c in bidders_row.get_children():
-		c.queue_free()
-	var nicks: Array = ["강남 큰손", "이사비 전문 꾼", "첫 임장 새내기", "은퇴자금 방어전", "옆동네 중개사", "조용한 법인"]
-	var cards: Array = []
-	var amt_labels: Array = []
-	for e in entries:
-		var card := VBoxContainer.new()
-		card.alignment = BoxContainer.ALIGNMENT_CENTER
-		var av := TextureRect.new()
-		av.texture = load(e["tex"])
-		av.custom_minimum_size = Vector2(72, 72)
-		av.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		av.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		card.add_child(av)
-		var who := Label.new()
-		who.text = "나" if e["mine"] else nicks[rng.randi() % nicks.size()]
-		who.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		who.add_theme_color_override("font_color", COL_GOLD if e["mine"] else COL_MUTED)
-		card.add_child(who)
-		var amt := Label.new()
-		amt.text = "―"
-		amt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		card.add_child(amt)
-		bidders_row.add_child(card)
-		cards.append(card)
-		amt_labels.append(amt)
-	bidders_row.visible = true
-
-	result.text = "[b]개찰[/b] — 집행관이 입찰봉투를 낮은 금액부터 개봉합니다. (응찰 %d명%s%s)" % [
-		n, "" if passed else " + 나", ", 상위만 표시" if n > 4 else ""]
-	Juice.pop_in(result)
+	# 법정 뷰로 전환: UI 걷고, 어둠 걷고, 단상으로 천천히 줌인
+	content.visible = false
+	range_label.visible = false
+	result.visible = false
+	court.pivot_offset = court.size * Vector2(0.5, 0.45)
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(dim, "color:a", 0.08, 0.6)
+	tw.tween_property(court, "scale", Vector2(1.14, 1.14), 6.0).set_trans(Tween.TRANS_SINE)
+	_call("지금부터 %s 개찰을 시작하겠습니다." % a["case_no"])
 	_say("두구두구...")
-	await get_tree().create_timer(0.9).timeout
+	await get_tree().create_timer(1.3).timeout
+
 	for i in entries.size():
+		var e: Dictionary = entries[i]
 		if i == entries.size() - 1:
-			_say("마지막 봉투입니다...!")
-			await get_tree().create_timer(0.9).timeout
+			_call("마지막 봉투입니다.")
+			await get_tree().create_timer(1.0).timeout
 		_play("click")
-		amt_labels[i].text = fmt(int(entries[i]["amt"]))
-		if entries[i]["mine"]:
-			amt_labels[i].add_theme_color_override("font_color", COL_GOLD)
-		Juice.punch(cards[i])
-		await get_tree().create_timer(0.6).timeout
+		_call("%s — %s!" % [e["who"], fmt(int(e["amt"]))])
+		await get_tree().create_timer(0.9).timeout
+
+	var top: Dictionary = entries[entries.size() - 1]
 	_play("gavel")
-	Juice.punch(cards[entries.size() - 1], 1.25)
 	Juice.shake(self)
-	await get_tree().create_timer(0.7).timeout
+	_call("최고가 %s — %s 님, 낙찰!" % [fmt(int(top["amt"])), top["who"]])
+	await get_tree().create_timer(1.2).timeout
+
+	# UI 복귀
+	var back := create_tween().set_parallel(true)
+	back.tween_property(dim, "color:a", 0.6, 0.45)
+	back.tween_property(court, "scale", Vector2.ONE, 0.45)
+	call_bubble.visible = false
+	content.visible = true
+	range_label.visible = true
 
 	if passed:
 		_settle_passed()
@@ -650,6 +660,12 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 		_decision(my_bid)
 	else:
 		_settle_lost(my_bid)
+
+
+func _call(msg: String) -> void:
+	call_bubble.visible = true
+	call_label.text = msg
+	Juice.punch(call_bubble)
 
 
 ## 낙찰! — 잔금을 낼 것인가, 보증금을 버릴 것인가
@@ -903,7 +919,6 @@ func _show_end() -> void:
 	bid_row.visible = false
 	quiz_row.visible = false
 	action_row.visible = false
-	bidders_row.visible = false
 	result.visible = false
 	next_btn.text = "다시 시작"
 	next_btn.visible = true

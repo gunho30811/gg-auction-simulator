@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bept5xnghg6d7"
-path="res://.godot/imported/bidder2.svg-66dea844c85b2ba2208fe39038f76703.ctex"
+uid="uid://dgtp2d27bxmnp"
+path="res://.godot/imported/char_bidder4.png-9256cb89bdbee047fab95b9c052af8b7.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/bidder2.svg"
-dest_files=["res://.godot/imported/bidder2.svg-66dea844c85b2ba2208fe39038f76703.ctex"]
+source_file="res://assets/art/char_bidder4.png"
+dest_files=["res://.godot/imported/char_bidder4.png-9256cb89bdbee047fab95b9c052af8b7.ctex"]
 
 [params]
 
@@ -38,6 +38,3 @@ process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
 detect_3d/compress_to=1
-svg/scale=1.0
-editor/scale_with_editor_scale=false
-editor/convert_colors_with_editor_theme=false
