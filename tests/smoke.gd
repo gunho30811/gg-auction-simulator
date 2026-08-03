@@ -27,8 +27,8 @@ func _initialize() -> void:
 	main._stamp()                 # 날인
 	main._on_form_btn()           # 보증금 봉투
 	await create_timer(0.5).timeout
-	main._on_form_btn()           # 입찰봉투
-	await create_timer(1.2).timeout
+	main._on_form_btn()           # 입찰봉투 (3D 플립 + 스르륵 ~2초)
+	await create_timer(2.6).timeout
 	main._on_form_btn()           # 수취증 + 투함 → 개찰
 	await create_timer(33.0).timeout  # 투함 연출 + 개찰 세리머니 + 매각결정기일
 	assert(main.action_row.visible, "낙찰 후 잔금/포기 선택지가 보여야 함")

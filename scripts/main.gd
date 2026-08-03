@@ -78,6 +78,8 @@ var form_cancel: Button
 var small_env: PanelContainer
 var big_env: PanelContainer
 var receipt: PanelContainer
+var form_front_box: VBoxContainer
+var form_back_box: VBoxContainer
 var next_btn: Button
 var speech: Label
 var frame_panel: PanelContainer
@@ -221,6 +223,12 @@ func _build_ui() -> void:
 	subtitle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	subtitle.size_flags_vertical = Control.SIZE_SHRINK_END
 	header.add_child(subtitle)
+	var simple_chk := CheckButton.new()
+	simple_chk.text = "간단 입찰"
+	simple_chk.tooltip_text = "기일입찰표 작성 과정을 생략하고 바로 제출합니다"
+	simple_chk.button_pressed = Game.simple_bid
+	simple_chk.toggled.connect(func(on: bool) -> void: Game.simple_bid = on)
+	header.add_child(simple_chk)
 	var cash_card := PanelContainer.new()
 	cash_card.add_theme_stylebox_override("panel", _card(COL_CARD, COL_GOLD, 10))
 	header.add_child(cash_card)
@@ -349,12 +357,6 @@ func _build_ui() -> void:
 	pass_btn.pressed.connect(func() -> void: _ceremony(0, true))
 	_style_button(pass_btn, false)
 	bid_row.add_child(pass_btn)
-	var simple_chk := CheckButton.new()
-	simple_chk.text = "간단 입찰"
-	simple_chk.tooltip_text = "기일입찰표 작성 과정을 생략하고 바로 제출합니다"
-	simple_chk.button_pressed = Game.simple_bid
-	simple_chk.toggled.connect(func(on: bool) -> void: Game.simple_bid = on)
-	bid_row.add_child(simple_chk)
 
 	next_btn = Button.new()
 	next_btn.text = "다음 물건 ▶"
@@ -989,13 +991,18 @@ func _show_bid_form() -> void:
 	form_layer = Control.new()
 	form_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(form_layer)
+	bid_row.visible = false
+	range_label.visible = false
 	var shade := ColorRect.new()
-	shade.color = Color(0, 0, 0, 0.55)
+	shade.color = Color(0, 0, 0, 0.72)
 	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
 	form_layer.add_child(shade)
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	form_layer.add_child(center)
+	var vwrap := VBoxContainer.new()
+	vwrap.add_theme_constant_override("separation", 14)
+	center.add_child(vwrap)
 
 	paper_panel = PanelContainer.new()
 	var ps := StyleBoxFlat.new()
@@ -1006,12 +1013,25 @@ func _show_bid_form() -> void:
 	ps.shadow_size = 18
 	ps.shadow_color = Color(0, 0, 0, 0.5)
 	paper_panel.add_theme_stylebox_override("panel", ps)
-	center.add_child(paper_panel)
+	vwrap.add_child(paper_panel)
 
 	var a: Dictionary = auctions[idx]
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 8)
 	paper_panel.add_child(box)
+	form_front_box = box
+
+	# 용지 뒷면 (위임장 서식) — 3D 플립 때 보임
+	form_back_box = VBoxContainer.new()
+	form_back_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	form_back_box.visible = false
+	paper_panel.add_child(form_back_box)
+	var back_title := _paper_label("위  임  장", 30, HORIZONTAL_ALIGNMENT_CENTER)
+	back_title.add_theme_color_override("font_color", Color(0.35, 0.35, 0.4, 0.5))
+	form_back_box.add_child(back_title)
+	var back_sub := _paper_label("(용지 뒷면 — 대리입찰 시 사용)", 12, HORIZONTAL_ALIGNMENT_CENTER)
+	back_sub.add_theme_color_override("font_color", Color(0.35, 0.35, 0.4, 0.4))
+	form_back_box.add_child(back_sub)
 
 	box.add_child(_paper_label("기  일  입  찰  표", 26, HORIZONTAL_ALIGNMENT_CENTER))
 	var head := HBoxContainer.new()
@@ -1064,19 +1084,19 @@ func _show_bid_form() -> void:
 
 	Juice.pop_in(paper_panel)
 
-	# 진행 버튼 (종이가 접혀도 남도록 form_layer 하단에 별도 배치)
+	# 진행 버튼 — 종이 바로 아래 중앙
 	var btn_bar := HBoxContainer.new()
-	btn_bar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	btn_bar.offset_top = -70
-	btn_bar.offset_bottom = -24
+	btn_bar.alignment = BoxContainer.ALIGNMENT_CENTER
 	btn_bar.add_theme_constant_override("separation", 12)
-	form_layer.add_child(btn_bar)
+	vwrap.add_child(btn_bar)
 	form_cancel = Button.new()
 	form_cancel.text = "다시 쓰기"
 	_style_button(form_cancel, false)
 	form_cancel.pressed.connect(func() -> void:
 		form_layer.queue_free()
 		form_layer = null
+		bid_row.visible = true
+		range_label.visible = true
 		busy = false)
 	btn_bar.add_child(form_cancel)
 	form_btn = Button.new()
@@ -1183,18 +1203,32 @@ func _pack_bid_env() -> void:
 	if form_step != 2:
 		return
 	form_step = 3
-	_play("swoosh")
-	# 입찰표·소봉투가 휘리릭 돌며 봉투 속으로
+	# 1) 3D 플립 — 종이가 뒤로 돌아 뒷면(위임장 서식)이 보임
 	paper_panel.pivot_offset = paper_panel.size / 2.0
+	_play("swoosh")
+	var flip1 := paper_panel.create_tween()
+	flip1.tween_property(paper_panel, "scale:x", 0.03, 0.22).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	flip1.parallel().tween_property(paper_panel, "modulate", Color(0.8, 0.8, 0.85), 0.22)
+	await flip1.finished
+	form_front_box.visible = false
+	form_back_box.visible = true
+	var flip2 := paper_panel.create_tween()
+	flip2.tween_property(paper_panel, "scale:x", 1.0, 0.24).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	flip2.parallel().tween_property(paper_panel, "modulate", Color(0.94, 0.94, 0.96), 0.24)
+	await flip2.finished
+	await get_tree().create_timer(0.4).timeout
+
+	# 2) 스르륵 — 반 접힌 채 소봉투와 함께 봉투 속으로 말려 들어감
+	_play("swoosh")
 	var tw := create_tween().set_parallel(true)
-	tw.tween_property(paper_panel, "rotation", TAU * 2.0, 0.65).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tw.tween_property(paper_panel, "scale", Vector2(0.04, 0.04), 0.65).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_IN)
-	tw.tween_property(paper_panel, "modulate:a", 0.0, 0.6)
+	tw.tween_property(paper_panel, "rotation", TAU * 1.25, 0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tw.tween_property(paper_panel, "scale", Vector2(0.04, 0.04), 0.8).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_IN)
+	tw.tween_property(paper_panel, "modulate:a", 0.0, 0.75)
 	if small_env:
 		small_env.pivot_offset = small_env.size / 2.0
-		tw.tween_property(small_env, "rotation", -TAU * 1.5, 0.65).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-		tw.tween_property(small_env, "scale", Vector2(0.04, 0.04), 0.65).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_IN)
-		tw.tween_property(small_env, "modulate:a", 0.0, 0.6)
+		tw.tween_property(small_env, "rotation", -TAU, 0.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+		tw.tween_property(small_env, "scale", Vector2(0.04, 0.04), 0.8).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_IN)
+		tw.tween_property(small_env, "modulate:a", 0.0, 0.75)
 	await tw.finished
 	paper_panel.visible = false
 	if small_env:
