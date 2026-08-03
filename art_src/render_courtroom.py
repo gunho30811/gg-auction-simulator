@@ -13,6 +13,7 @@ import bpy  # noqa: E402
 
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 OUT = argv[0] if argv else "//courtroom.png"
+MODE = argv[1] if len(argv) > 1 else "crowd"  # crowd | empty (개찰 리액션용 빈 좌석)
 
 B.reset()
 
@@ -104,22 +105,23 @@ for row_y in (0.4, -0.9):
         SEATS.append((cx - 0.3, row_y))
 
 # 방청객 — 같이 개찰을 기다리는 입찰자들 (뒷모습, 좌석의 2/3 채움)
-import random
-random.seed(11)
-HAIRS = [(0.15, 0.13, 0.12), (0.35, 0.24, 0.16), (0.55, 0.42, 0.28),
-         (0.78, 0.78, 0.80), (0.10, 0.10, 0.12), (0.45, 0.30, 0.35)]
-SUITS = [(0.35, 0.48, 0.70), (0.63, 0.40, 0.42), (0.28, 0.40, 0.32),
-         (0.76, 0.53, 0.35), (0.50, 0.50, 0.55), (0.25, 0.28, 0.35), (0.85, 0.80, 0.70)]
-STYLES = ["short", "bob", "bun", "cap"]
-random.shuffle(SEATS)
-for i, (sx, sy) in enumerate(SEATS[:8]):
-    B.sd_character({"name": "crowd%d" % i, "hair": random.choice(HAIRS),
-                    "hair_style": random.choice(STYLES), "suit": random.choice(SUITS)},
-                   origin=(sx, sy + 0.05, 0.34), char_scale=0.78, face_dir=1)
+if MODE == "crowd":
+    import random
+    random.seed(11)
+    HAIRS = [(0.15, 0.13, 0.12), (0.35, 0.24, 0.16), (0.55, 0.42, 0.28),
+             (0.78, 0.78, 0.80), (0.10, 0.10, 0.12), (0.45, 0.30, 0.35)]
+    SUITS = [(0.35, 0.48, 0.70), (0.63, 0.40, 0.42), (0.28, 0.40, 0.32),
+             (0.76, 0.53, 0.35), (0.50, 0.50, 0.55), (0.25, 0.28, 0.35), (0.85, 0.80, 0.70)]
+    STYLES = ["short", "bob", "bun", "cap"]
+    random.shuffle(SEATS)
+    for i, (sx, sy) in enumerate(SEATS[:8]):
+        B.sd_character({"name": "crowd%d" % i, "hair": random.choice(HAIRS),
+                        "hair_style": random.choice(STYLES), "suit": random.choice(SUITS)},
+                       origin=(sx, sy + 0.05, 0.34), char_scale=0.78, face_dir=1)
 
-# 내 옆자리 아저씨 (전경, DOF 블러)
-B.sd_character({"name": "neighbor", "hair": (0.2, 0.17, 0.15), "hair_style": "cap",
-                "suit": (0.30, 0.33, 0.40)}, origin=(-1.7, -3.35, 0.30), char_scale=0.9, face_dir=1)
+    # 내 옆자리 아저씨 (전경, DOF 블러)
+    B.sd_character({"name": "neighbor", "hair": (0.2, 0.17, 0.15), "hair_style": "cap",
+                    "suit": (0.30, 0.33, 0.40)}, origin=(-1.7, -3.35, 0.30), char_scale=0.9, face_dir=1)
 
 # 내 앞줄 등받이 (착석 시점 전경 — DOF로 흐려짐)
 for cx in (-2.1, -0.9, 0.3, 1.5):

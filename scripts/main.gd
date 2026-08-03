@@ -6,6 +6,11 @@ const START_CASH := 2_000_000_000
 const IMG_DIR := "res://data/images/"
 const SFX_NAMES := ["click", "gavel", "win", "lose", "correct", "wrong", "coin"]
 
+# 개찰 리액션 캐릭터 (좌석 위치는 화면 비율 좌표, 발밑 기준)
+const CHAR_TEX := ["res://assets/art/char_bidder1.png", "res://assets/art/char_bidder2.png",
+	"res://assets/art/char_bidder3.png", "res://assets/art/char_bidder4.png"]
+const SLOTS := [Vector2(0.14, 0.70), Vector2(0.33, 0.64), Vector2(0.67, 0.64), Vector2(0.86, 0.70)]
+
 const COL_BG := Color("12141c")
 const COL_CARD := Color("1b1e2a")
 const COL_EDGE := Color("2b3044")
@@ -51,6 +56,7 @@ var dim: ColorRect
 var content: HBoxContainer
 var call_bubble: PanelContainer
 var call_label: Label
+var sprite_layer: Control
 var next_btn: Button
 var speech: Label
 var frame_panel: PanelContainer
@@ -132,6 +138,10 @@ func _build_ui() -> void:
 	dim.color = Color(0.04, 0.04, 0.07, 0.6)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(dim)
+	sprite_layer = Control.new()
+	sprite_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	sprite_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(sprite_layer)
 	_make_dust()
 
 	var panel := PanelContainer.new()
@@ -619,10 +629,25 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 		entries.append({"amt": my_bid, "who": "나 (지지)", "mine": true})
 	entries.sort_custom(func(x, y) -> bool: return x["amt"] < y["amt"])
 
-	# 법정 뷰로 전환: UI 걷고, 어둠 걷고, 단상으로 천천히 줌인
+	# 캐릭터 스프라이트 배정 (호명 시 좌석에서 일어남)
+	var slot_i := 0
+	for e in entries:
+		if e["mine"]:
+			e["tex"] = "res://assets/characters/jiji3d.png"
+			e["pos"] = Vector2(0.5, 1.06)
+			e["px"] = 250.0
+		else:
+			e["tex"] = CHAR_TEX[slot_i % 4]
+			e["pos"] = SLOTS[slot_i % SLOTS.size()]
+			e["px"] = 160.0
+			slot_i += 1
+		e["spr"] = null
+
+	# 법정 뷰로 전환: UI 걷고, 어둠 걷고, 방청객은 리액션 스프라이트로 교대
 	content.visible = false
 	range_label.visible = false
 	result.visible = false
+	court.texture = load("res://assets/art/courtroom_empty.png")
 	court.pivot_offset = court.size * Vector2(0.5, 0.45)
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(dim, "color:a", 0.08, 0.6)
@@ -638,15 +663,40 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 			await get_tree().create_timer(1.0).timeout
 		_play("click")
 		_call("%s — %s!" % [e["who"], fmt(int(e["amt"]))])
+		e["spr"] = _pop_char(e)
 		await get_tree().create_timer(0.9).timeout
 
 	var top: Dictionary = entries[entries.size() - 1]
+	top["win"] = true
 	_play("gavel")
 	Juice.shake(self)
 	_call("최고가 %s — %s 님, 낙찰!" % [fmt(int(top["amt"])), top["who"]])
-	await get_tree().create_timer(1.2).timeout
 
-	# UI 복귀
+	# 리액션: 낙찰자는 점프+별, 나머지는 시무룩하게 가라앉음
+	for e in entries:
+		var spr: TextureRect = e["spr"]
+		if spr == null:
+			continue
+		if e.get("win", false):
+			Juice.punch(spr, 1.3)
+			Juice.stars_burst(self, spr.position + Vector2(float(e["px"]) / 2.0, 30.0), 14)
+			var jump := spr.create_tween()
+			jump.tween_property(spr, "position:y", spr.position.y - 45.0, 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			jump.tween_property(spr, "position:y", spr.position.y, 0.3).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+		else:
+			var sad := spr.create_tween().set_parallel(true)
+			sad.tween_property(spr, "modulate", Color(0.5, 0.5, 0.58, 0.9), 0.45)
+			sad.tween_property(spr, "position:y", spr.position.y + 28.0, 0.55)
+	await get_tree().create_timer(1.4).timeout
+
+	# UI 복귀 — 스프라이트 퇴장, 방청객 배경 복귀
+	for e in entries:
+		if e["spr"] != null:
+			var f: TextureRect = e["spr"]
+			var out := f.create_tween()
+			out.tween_property(f, "modulate:a", 0.0, 0.3)
+			out.tween_callback(f.queue_free)
+	court.texture = load("res://assets/art/courtroom.png")
 	var back := create_tween().set_parallel(true)
 	back.tween_property(dim, "color:a", 0.6, 0.45)
 	back.tween_property(court, "scale", Vector2.ONE, 0.45)
@@ -666,6 +716,25 @@ func _call(msg: String) -> void:
 	call_bubble.visible = true
 	call_label.text = msg
 	Juice.punch(call_bubble)
+
+
+## 좌석에서 벌떡 일어나는 캐릭터 스프라이트
+func _pop_char(e: Dictionary) -> TextureRect:
+	var px: float = e["px"]
+	var spr := TextureRect.new()
+	spr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE  # size 설정 전에! (안 그러면 텍스처 크기로 클램프)
+	spr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	spr.texture = load(e["tex"])
+	spr.size = Vector2(px, px)
+	spr.pivot_offset = Vector2(px / 2.0, px)
+	var base := Vector2(size.x * e["pos"].x - px / 2.0, size.y * e["pos"].y - px)
+	spr.position = base + Vector2(0, 80)
+	spr.modulate.a = 0.0
+	sprite_layer.add_child(spr)
+	var tw := spr.create_tween().set_parallel(true)
+	tw.tween_property(spr, "position", base, 0.32).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(spr, "modulate:a", 1.0, 0.22)
+	return spr
 
 
 ## 낙찰! — 잔금을 낼 것인가, 보증금을 버릴 것인가
