@@ -1,5 +1,6 @@
 extends Control
-## 게임 루프: 조사(실거래·권리분석·현장) → 입찰 → 개찰 연출 → 실제 결과와 비교 → 비용 정산 → 판단 별점
+## 낙찰자의 여정: 조사(시세 범위 좁히기·권리분석·임장) → 입찰(보증금) → 개찰 세리머니
+## → 낙찰 시 잔금/포기 결정 → 명도 선택 → 한 줄씩 정산 → 3축 별점
 
 const START_CASH := 2_000_000_000
 const IMG_DIR := "res://data/images/"
@@ -17,11 +18,12 @@ var auctions: Array
 var rules: Dictionary
 var idx := 0
 var cash := START_CASH
+var cash_shown := START_CASH
 var wins := 0
 var stars_total := 0
 var finished := false
 var img_idx := 0
-var opening := false
+var busy := false
 
 # 물건별 조사 상태
 var quiz_state := 0  # 0=미응답 1=정답 2=오답
@@ -37,6 +39,8 @@ var info: RichTextLabel
 var tab_row: HBoxContainer
 var detail: RichTextLabel
 var quiz_row: HBoxContainer
+var action_row: HBoxContainer
+var range_label: Label
 var bid_row: HBoxContainer
 var bid_edit: LineEdit
 var bid_preview: Label
@@ -60,6 +64,14 @@ func _ready() -> void:
 func _play(name: String) -> void:
 	sfx_player.stream = sfx[name]
 	sfx_player.play()
+
+
+func _update_cash() -> void:
+	Juice.count(cash_label, cash_shown, cash, func(v: int) -> void:
+		cash_label.text = "보유 자금  " + fmt(v))
+	if cash != cash_shown:
+		Juice.punch(cash_label)
+	cash_shown = cash
 
 
 func _card(bg: Color, edge: Color, radius := 12, border := 1) -> StyleBoxFlat:
@@ -88,6 +100,7 @@ func _style_button(b: Button, primary: bool) -> void:
 	var fc := Color("1a1508") if primary else Color("e6e6ee")
 	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
 		b.add_theme_color_override(state, fc)
+	Juice.button(b)
 
 
 func _make_rich(font_size := 17) -> RichTextLabel:
@@ -191,7 +204,6 @@ func _build_ui() -> void:
 	info = _make_rich()
 	scroll_box.add_child(info)
 
-	# 조사 탭
 	tab_row = HBoxContainer.new()
 	tab_row.add_theme_constant_override("separation", 8)
 	scroll_box.add_child(tab_row)
@@ -220,11 +232,19 @@ func _build_ui() -> void:
 	result.visible = false
 	scroll_box.add_child(result)
 
-	# 입찰 행 (빠른 버튼 + 직접 입력)
+	action_row = HBoxContainer.new()
+	action_row.add_theme_constant_override("separation", 8)
+	action_row.visible = false
+	scroll_box.add_child(action_row)
+
+	range_label = Label.new()
+	range_label.add_theme_color_override("font_color", COL_MUTED)
+	right.add_child(range_label)
+
 	bid_row = HBoxContainer.new()
 	bid_row.add_theme_constant_override("separation", 8)
 	right.add_child(bid_row)
-	for quick in [["최저가", "min"], ["감정가 80%", "a80"], ["감정가", "a100"]]:
+	for quick in [["최저가", "min"], ["분석 하한", "lo"], ["분석 상한", "hi"]]:
 		var b := Button.new()
 		b.text = quick[0]
 		_style_button(b, false)
@@ -248,7 +268,7 @@ func _build_ui() -> void:
 	bid_row.add_child(bid_btn)
 	var pass_btn := Button.new()
 	pass_btn.text = "패스"
-	pass_btn.pressed.connect(func() -> void: _open_bids(0, true))
+	pass_btn.pressed.connect(func() -> void: _ceremony(0, true))
 	_style_button(pass_btn, false)
 	bid_row.add_child(pass_btn)
 
@@ -299,12 +319,31 @@ func _next_photo() -> void:
 	photo_caption.text = "사진 %d/%d (클릭해서 넘기기)" % [img_idx + 1, imgs.size()]
 
 
+func _deposit(a: Dictionary) -> int:
+	return int(int(a["min_price"]) * float(rules.get("bid_deposit_rate", 0.1)))
+
+
+## 조사할수록 좁아지는 시세 분석 범위 (정답은 절대 직접 노출하지 않음)
+func _analysis_range(a: Dictionary) -> Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(a["case_no"])
+	var center := int(int(a["market_price"]) * rng.randf_range(0.96, 1.04))
+	var widths := [0.25, 0.15, 0.10, 0.06]
+	var w: float = widths[clampi(seen_tabs.size(), 0, 3)]
+	return [int(center * (1.0 - w)), int(center * (1.0 + w))]
+
+
+func _update_range() -> void:
+	var r := _analysis_range(auctions[idx])
+	range_label.text = "내 시세 분석: %s ~ %s  (조사 %d/3 — 조사할수록 좁아져요)" % [fmt(r[0]), fmt(r[1]), seen_tabs.size()]
+
+
 func _show_auction() -> void:
 	if idx >= auctions.size():
 		_show_end()
 		return
 	var a: Dictionary = auctions[idx]
-	cash_label.text = "보유 자금  %s" % fmt(cash)
+	_update_cash()
 	quiz_state = 0
 	seen_tabs = {}
 
@@ -317,39 +356,45 @@ func _show_auction() -> void:
 	if a.get("built_date", "") != "":
 		age = " | %s년 사용승인" % a["built_date"].substr(0, 4)
 	info.text = ("[b]%s — %s[/b]  [color=%s](%d / %d)[/color]\n%s | %s\n전용 %.1f㎡ | 대지권 %.1f㎡%s | 점유: %s\n\n" +
-		"감정가: [b][color=%s]%s[/color][/b]\n최저매각가격: [b][color=%s]%s[/color][/b]  (유찰 %d회)\n매각기일: %s") % [
+		"감정가: [b][color=%s]%s[/color][/b]\n최저매각가격: [b][color=%s]%s[/color][/b]  (유찰 %d회)\n" +
+		"입찰보증금(최저가 10%%): [b]%s[/b] — 낙찰 후 잔금 포기 시 몰수!\n매각기일: %s") % [
 		a["case_no"], a["kind"], MUTED, idx + 1, auctions.size(),
 		a["court"], a["address"], a["area_m2"], a.get("land_share_m2", 0.0), age, a["occupancy"],
 		GOLD, fmt(int(a["appraisal_price"])), GOLD, fmt(int(a["min_price"])),
-		int(a["fail_count"]), a["sale_date"]]
+		int(a["fail_count"]), fmt(_deposit(a)), a["sale_date"]]
 
-	detail.text = "[color=%s]입찰 전에 위 탭으로 조사하세요 — 실거래로 시세를 가늠하고, 권리분석으로 인수 위험을 판단하고, 현장조사로 상태를 확인합니다.[/color]" % MUTED
+	detail.text = "[color=%s]입찰 전에 위 탭으로 조사하세요. 조사한 만큼 시세 분석 범위가 좁아지고, 권리 함정이 보입니다.[/color]" % MUTED
 	quiz_row.visible = false
-	_say("입찰 전 조사가 반이에요. 실거래·권리분석·현장조사 탭을 눌러보세요!")
+	action_row.visible = false
+	_update_range()
+	_say("입찰 전 조사가 반이에요. 조사를 건너뛰면 분석 범위가 넓어서 감으로 쓰게 돼요!")
 
 	bid_edit.clear()
 	bid_preview.text = ""
 	bid_row.visible = true
 	result.visible = false
 	next_btn.visible = false
-	opening = false
+	busy = false
 
 
 func _show_tab(which: String) -> void:
+	if busy:
+		return
 	_play("click")
 	seen_tabs[which] = true
+	_update_range()
 	var a: Dictionary = auctions[idx]
 	quiz_row.visible = false
 	match which:
 		"comps":
-			var t := "[b]■ 실거래·시세 (거래사례비교법)[/b]\n감정평가사는 인근 유사물건의 실거래에 시점보정을 해서 가치를 산정해요.\n\n"
+			var t := "[b]■ 실거래·시세[/b]\n입찰가의 기준은 감정가가 아니라 '지금 시세'예요. 감정 시점은 과거입니다.\n\n"
 			for c in a.get("comps", []):
 				t += "  · %s — [color=%s]%s[/color] (%s)\n" % [c["label"], GOLD, fmt(int(c["price"])), c["date"]]
 			if a.get("comps", []).is_empty():
 				t += "  (사례 자료 없음)\n"
 			if a.get("price_index_note", "") != "":
 				t += "  · 가격지수: %s\n" % a["price_index_note"]
-			t += "\n[color=%s]→ 이 사례들로 '지금 시세'를 스스로 추정해보세요. 감정가는 과거 기준시점의 값입니다.[/color]" % MUTED
+			t += "\n[color=%s]→ 위 사례와 지수로 내 분석 범위가 좁아졌어요 (아래 확인).[/color]" % MUTED
 			detail.text = t
 		"rights":
 			var t := "[b]■ 권리분석 (매각물건명세서)[/b]\n말소기준권리: [b]%s %s 설정[/b]\n" % [a.get("base_rights_date", "?"), a.get("base_rights_kind", "")]
@@ -374,7 +419,7 @@ func _show_tab(which: String) -> void:
 			var t := "[b]■ 현장조사 (임장)[/b]\n"
 			t += "점유 현황: %s\n" % a["occupancy"]
 			if int(a.get("unpaid_mgmt_fee", 0)) > 0:
-				t += "미납 관리비: [color=%s]%s[/color] (공용부분은 매수인 인수)\n" % [GOLD, fmt(int(a["unpaid_mgmt_fee"]))]
+				t += "미납 관리비: [color=%s]%s[/color] (공용부분은 매수인 인수 — 판례상 최근 3년)\n" % [GOLD, fmt(int(a["unpaid_mgmt_fee"]))]
 			if a.get("site_notes", "") != "":
 				t += "%s\n" % a["site_notes"]
 			if a.get("notes", "") != "":
@@ -407,18 +452,19 @@ func _answer_quiz(said_assumed: bool) -> void:
 func _quick_bid(kind: String) -> void:
 	_play("click")
 	var a: Dictionary = auctions[idx]
+	var r := _analysis_range(a)
 	var v := 0
 	match kind:
 		"min": v = int(a["min_price"])
-		"a80": v = int(int(a["appraisal_price"]) * 0.8)
-		"a100": v = int(a["appraisal_price"])
+		"lo": v = maxi(r[0], int(a["min_price"]))
+		"hi": v = maxi(r[1], int(a["min_price"]))
 	var man := ceili(v / 10_000.0)  # 내림하면 최저가 미만(무효)이 될 수 있어 올림
 	bid_edit.text = str(man)
 	bid_preview.text = fmt(man * 10_000)
 
 
 func _on_bid() -> void:
-	if opening:
+	if busy:
 		return
 	var bid := bid_edit.text.replace(",", "").to_int() * 10_000
 	var a: Dictionary = auctions[idx]
@@ -430,98 +476,246 @@ func _on_bid() -> void:
 		bid_preview.text = "보유 자금 초과!"
 		_play("wrong")
 		return
-	_open_bids(bid, false)
+	if bid >= int(a["appraisal_price"]) * 5:
+		bid_preview.text = "입찰가를 다시 확인하세요 — '0' 하나 더 쓰면 보증금 몰수입니다!"
+		_play("wrong")
+		return
+	_ceremony(bid, false)
 
 
-func _open_bids(bid: int, passed: bool) -> void:
-	opening = true
+## 개찰 세리머니: 입찰봉투를 낮은 가격부터 하나씩 개봉
+func _ceremony(my_bid: int, passed: bool) -> void:
+	busy = true
 	bid_row.visible = false
 	quiz_row.visible = false
-	result.visible = true
-	if passed:
-		result.text = "[color=%s]입찰을 포기하고 개찰을 지켜봅니다...[/color]" % MUTED
-	else:
-		result.text = "[color=%s]입찰표 제출 완료. 개찰 중...[/color]" % MUTED
-		_play("click")
-	_say("두구두구...")
-	await get_tree().create_timer(1.4).timeout
-	_play("gavel")
-	await get_tree().create_timer(0.5).timeout
-	_reveal(bid, passed)
-	opening = false
-
-
-func _case_costs(a: Dictionary, price: int) -> int:
-	return CostCalc.total(CostCalc.breakdown(a, price, rules))
-
-
-func _reveal(bid: int, passed: bool) -> void:
+	action_row.visible = false
 	var a: Dictionary = auctions[idx]
 	var actual := int(a["winning_bid"])
-	var market := int(a["market_price"])
-	var txt := "실제 낙찰가: [b][color=%s]%s[/color][/b]  (응찰자 %d명, 감정가 대비 %.1f%%)\n" % [
-		GOLD, fmt(actual), int(a["bidder_count"]), actual * 100.0 / int(a["appraisal_price"])]
-	if int(a.get("second_bid", 0)) > 0:
-		txt += "차순위: %s\n" % fmt(int(a["second_bid"]))
 
-	# 판단 별점: 퀴즈(1) + 판단(2)
-	var stars := 0
-	if a.get("tenants", []).is_empty():
-		stars += 1
-	elif quiz_state == 1:
-		stars += 1
+	var bids: Array = []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(a["case_no"]) + 7
+	var n := maxi(int(a["bidder_count"]), 1)
+	for i in n - 1:
+		bids.append(int(rng.randf_range(float(int(a["min_price"])), float(actual)) / 10_000.0) * 10_000)
+	if n >= 2 and int(a.get("second_bid", 0)) > 0:
+		bids[0] = int(a["second_bid"])
+	bids.append(actual)
+	if not passed:
+		bids.append(my_bid)
+	bids.sort()
+
+	result.text = "[b]개찰[/b] — 집행관이 입찰봉투를 개봉합니다. (응찰 %d명%s)\n" % [n, "" if passed else " + 나"]
+	Juice.pop_in(result)
+	_say("두구두구...")
+	await get_tree().create_timer(0.9).timeout
+	for b in bids:
+		_play("click")
+		if not passed and b == my_bid:
+			result.text += "  ▸ [color=%s][b]%s — 내 입찰![/b][/color]\n" % [GOLD, fmt(b)]
+		else:
+			result.text += "  ▸ %s\n" % fmt(b)
+		await get_tree().create_timer(0.55).timeout
+	_play("gavel")
+	Juice.shake(self)
+	await get_tree().create_timer(0.6).timeout
 
 	if passed:
-		var would_net := market - actual - _case_costs(a, actual)
-		if would_net < 0:
-			stars += 2
-			txt += "\n[b]패스[/b] — 좋은 판단! 실제 낙찰자는 정산하면 [color=salmon]%s 손해[/color]였을 물건이에요." % fmt(would_net)
-			_say("함정을 피했네요. 프로다워요!")
-			_play("correct")
-		else:
-			txt += "\n[b]패스[/b] — 실제 낙찰자는 정산 후 [color=lightgreen]약 %s 수익[/color]을 봤어요. 아까웠네요!" % fmt(would_net)
-			_say("신중한 것도 실력이지만, 이건 기회였어요.")
-			_play("lose")
-	elif bid > actual:
-		wins += 1
-		var items := CostCalc.breakdown(a, bid, rules)
-		var tot := CostCalc.total(items)
-		var net := market - bid - tot
-		cash += net
-		if net >= 0:
-			stars += 2
-		txt += "\n[color=%s][b]★ 낙찰![/b][/color] 내 입찰가: [b]%s[/b]\n\n[b]부대비용 정산[/b]\n" % [GOLD, fmt(bid)]
-		for it in items:
-			txt += "  %s: %s\n" % [it["name"], fmt(int(it["amount"]))]
-		txt += "  [b]부대비용 합계: %s[/b]\n\n" % fmt(tot)
-		txt += "시세(매각 가정): %s\n" % fmt(market)
-		var color := "lightgreen" if net >= 0 else "salmon"
-		txt += "[color=%s][b]순손익: %s%s[/b][/color]\n" % [color, "+" if net >= 0 else "", fmt(net)]
-		cash_label.text = "보유 자금  %s" % fmt(cash)
-		_say("낙~찰! 수익까지 완벽해요!" if net >= 0 else "낙찰은 됐지만 정산하면 손해예요. 인수 금액과 세금까지 계산했어야 해요!")
-		_play("win" if net >= 0 else "lose")
-		if net >= 0:
-			_play_delayed("coin", 0.8)
+		_settle_passed()
+	elif my_bid > actual:
+		_decision(my_bid)
 	else:
-		txt += "\n[b]패찰[/b] — 내 입찰가 %s로는 부족했어요." % fmt(bid)
-		var would_net := market - actual - _case_costs(a, actual)
-		if would_net < 0:
-			stars += 2
-			txt += "\n[color=%s]하지만 실제 낙찰가로는 %s 손해였을 물건 — 무리하지 않은 게 정답![/color]" % [MUTED, fmt(would_net)]
-		_say("아쉽네요! 실전에선 1만원 차이로도 갈려요.")
-		_play("lose")
+		_settle_lost(my_bid)
 
-	stars_total += stars
-	txt += "\n이번 판단 평가: [color=%s]%s%s[/color]" % [GOLD, "★".repeat(stars), "☆".repeat(3 - stars)]
+
+## 낙찰! — 잔금을 낼 것인가, 보증금을 버릴 것인가
+func _decision(bid: int) -> void:
+	var a: Dictionary = auctions[idx]
+	var items := CostCalc.breakdown(a, bid, rules)
+	var tot := CostCalc.total(items)
+	var evict := CostCalc.eviction_options(a, rules)
+	var evict_min := mini(int(evict[0]["cost"]), int(evict[1]["cost"]))
+	var dep := _deposit(a)
+
+	var txt := "\n[color=%s][b]★ 최고가매수신고인![/b][/color] 내 입찰가: [b]%s[/b]\n\n" % [GOLD, fmt(bid)]
+	txt += "[b]잔금 납부 전 최종 점검[/b] (매각허가 후 약 40일 내 납부)\n"
+	txt += "  세금·등기 등 부대비용: %s\n" % fmt(tot)
+	txt += "  예상 명도비: %s~\n" % fmt(evict_min)
+	var r := _analysis_range(a)
+	txt += "  내 시세 분석: %s ~ %s\n\n" % [fmt(r[0]), fmt(r[1])]
+	txt += "잔금을 포기하면 보증금 [color=salmon]%s[/color]을 몰수당합니다." % fmt(dep)
 	result.text = txt
+	_say("낙찰 축하해요! 그런데... 정산이 남았죠. 잔금, 내실 건가요?")
+
+	_actions([
+		{"label": "잔금 납부하기", "primary": true, "cb": func() -> void: _pay_balance(bid)},
+		{"label": "포기 (보증금 %s 몰수)" % fmt(dep), "primary": false, "cb": func() -> void: _forfeit(bid)},
+	])
+
+
+func _actions(defs: Array) -> void:
+	for c in action_row.get_children():
+		c.queue_free()
+	for d in defs:
+		var b := Button.new()
+		b.text = d["label"]
+		_style_button(b, d["primary"])
+		b.pressed.connect(func() -> void:
+			action_row.visible = false
+			d["cb"].call())
+		action_row.add_child(b)
+	action_row.visible = true
+
+
+func _pay_balance(bid: int) -> void:
+	_play("click")
+	var a: Dictionary = auctions[idx]
+	if int(rules["eviction"].get(a.get("occupancy", "공실"), {}).get("negotiate", 0)) == 0 \
+			and int(rules["eviction"].get(a.get("occupancy", "공실"), {}).get("enforce", 0)) == 0:
+		_settle_won(bid, 0, "공실 — 즉시 인도", 0)
+		return
+	var opts := CostCalc.eviction_options(a, rules)
+	var txt := "\n[b]명도 — 점유자(%s)를 내보내야 합니다[/b]\n" % a["occupancy"]
+	for o in opts:
+		txt += "  · %s: %s, 약 %d개월%s\n" % [o["label"], fmt(int(o["cost"])), int(o["months"]),
+			("  ← " + o["note"]) if o["note"] != "" else ""]
+	result.text = txt
+	_say("명도는 돈이냐 시간이냐의 선택이에요. 배당받는 임차인은 명도확인서가 필요해서 협상이 쉽죠.")
+	_actions([
+		{"label": "%s (%s)" % [opts[0]["label"], fmt(int(opts[0]["cost"]))], "primary": true,
+			"cb": func() -> void: _settle_won(bid, int(opts[0]["cost"]), opts[0]["label"], int(opts[0]["months"]))},
+		{"label": "%s (%s)" % [opts[1]["label"], fmt(int(opts[1]["cost"]))], "primary": false,
+			"cb": func() -> void: _settle_won(bid, int(opts[1]["cost"]), opts[1]["label"], int(opts[1]["months"]))},
+	])
+
+
+func _forfeit(bid: int) -> void:
+	var a: Dictionary = auctions[idx]
+	var dep := _deposit(a)
+	cash -= dep
+	var market := int(a["market_price"])
+	var full_net := market - bid - CostCalc.total(CostCalc.breakdown(a, bid, rules)) \
+		- mini(int(CostCalc.eviction_options(a, rules)[0]["cost"]), int(CostCalc.eviction_options(a, rules)[1]["cost"]))
+	var good := full_net < -dep
+	var txt := "\n[b]잔금 포기[/b] — 보증금 [color=salmon]-%s[/color] 몰수. 재매각 절차로 넘어가며, 나는 재입찰 금지.\n" % fmt(dep)
+	if good:
+		txt += "[color=lightgreen]손절 성공: 잔금을 냈다면 약 %s 손해였어요. 몰수가 오히려 쌌습니다.[/color]\n" % fmt(full_net)
+		_say("아프지만 옳은 결정! 실전에서도 낙찰 후 함정을 발견하면 보증금을 버리는 게 나을 때가 있어요.")
+		_play("correct")
+	else:
+		txt += "[color=salmon]아까운 포기: 잔금을 냈다면 약 %s 손익이었어요.[/color]\n" % fmt(full_net)
+		_say("이 물건은 진행해도 괜찮았어요. 조사가 부족하면 낙찰하고도 겁이 나죠.")
+		_play("lose")
+	_finish_case(txt, "forfeit", bid, 0, full_net)
+
+
+func _settle_won(bid: int, evict_cost: int, evict_label: String, months: int) -> void:
+	_play("click")
+	busy = true
+	var a: Dictionary = auctions[idx]
+	wins += 1
+	var items := CostCalc.breakdown(a, bid, rules)
+	var market := int(a["market_price"])
+	var tot := CostCalc.total(items) + evict_cost
+	var net := market - bid - tot
+	cash += net
+
+	result.text = "\n[b]정산[/b] — 낙찰가 %s, 명도: %s (%d개월)\n" % [fmt(bid), evict_label, months]
+	var lines: Array = []
+	for it in items:
+		lines.append("  %s: -%s" % [it["name"], fmt(int(it["amount"]))])
+	if evict_cost > 0:
+		lines.append("  명도비 (%s): -%s" % [evict_label, fmt(evict_cost)])
+	lines.append("  [b]총 취득원가: %s[/b]" % fmt(bid + tot))
+	lines.append("  시세 매각: +%s" % fmt(market))
+	for line in lines:
+		await get_tree().create_timer(0.4).timeout
+		_play("click")
+		result.text += line + "\n"
+	await get_tree().create_timer(0.5).timeout
+	var color := "lightgreen" if net >= 0 else "salmon"
+	var txt := "[color=%s][b]순손익: %s%s[/b][/color]\n" % [color, "+" if net >= 0 else "", fmt(net)]
+	_play("win" if net >= 0 else "lose")
+	if net >= 0:
+		get_tree().create_timer(0.7).timeout.connect(_play.bind("coin"))
+	_update_cash()
+	_say("낙~찰! 수익까지 완벽해요!" if net >= 0 else "낙찰은 됐지만 정산하면 손해예요. 인수 금액과 세금까지 계산했어야 해요!")
+	_finish_case(txt, "won", bid, net, net)
+
+
+func _settle_lost(bid: int) -> void:
+	var a: Dictionary = auctions[idx]
+	var actual := int(a["winning_bid"])
+	var diff := actual - bid
+	var acc := 100.0 - absf(bid - actual) * 100.0 / actual
+	var would_net := int(a["market_price"]) - actual - CostCalc.total(CostCalc.breakdown(a, actual, rules))
+	var txt := "\n[b]패찰[/b] — 실제 낙찰가 [color=%s]%s[/color], 차액 [b]%s[/b] (정확도 %.1f%%)\n" % [
+		GOLD, fmt(actual), fmt(diff), acc]
+	txt += "낙찰가율: 감정가 대비 %.1f%% | 응찰 %d명\n" % [actual * 100.0 / int(a["appraisal_price"]), int(a["bidder_count"])]
+	if would_net < 0:
+		txt += "[color=%s]실제 낙찰자는 정산하면 약 %s 손해 — 무리하지 않은 당신이 이겼습니다.[/color]\n" % [MUTED, fmt(would_net)]
+		_say("이건 승자의 저주 물건이었어요. 패찰이 곧 수익이죠!")
+	else:
+		txt += "[color=%s]실제 낙찰자 예상 손익: 약 +%s[/color]\n" % [MUTED, fmt(would_net)]
+		_say("%s만 더 썼으면 내 물건이었네요. 다음엔 분석 범위 상단을 노려봐요!" % fmt(diff))
+	_play("lose")
+	_finish_case(txt, "lost", bid, 0, would_net)
+
+
+func _settle_passed() -> void:
+	var a: Dictionary = auctions[idx]
+	var actual := int(a["winning_bid"])
+	var would_net := int(a["market_price"]) - actual - CostCalc.total(CostCalc.breakdown(a, actual, rules))
+	var txt := "\n[b]입찰 포기[/b] — 실제 낙찰가 [color=%s]%s[/color] (감정가 대비 %.1f%%, 응찰 %d명)\n" % [
+		GOLD, fmt(actual), actual * 100.0 / int(a["appraisal_price"]), int(a["bidder_count"])]
+	if would_net < 0:
+		txt += "[color=lightgreen]좋은 판단 — 낙찰자는 정산하면 약 %s 손해였을 물건.[/color]\n" % fmt(would_net)
+		_say("함정을 피했네요. 프로다워요!")
+		_play("correct")
+	else:
+		txt += "[color=salmon]아까운 패스 — 낙찰자는 약 +%s 수익.[/color]\n" % fmt(would_net)
+		_say("신중한 것도 실력이지만, 이건 기회였어요.")
+		_play("lose")
+	_finish_case(txt, "passed", 0, 0, would_net)
+
+
+## 3축 별점: 조사 완전성 / 분석 정확도 / 재무 판단
+func _finish_case(txt: String, kind: String, bid: int, net: int, would_net: int) -> void:
+	var a: Dictionary = auctions[idx]
+	var actual := int(a["winning_bid"])
+	var tenants: Array = a.get("tenants", [])
+	var inv: bool = seen_tabs.size() >= 3 and (tenants.is_empty() or quiz_state == 1)
+	var ana := false
+	var fin := false
+	match kind:
+		"won":
+			ana = absf(bid - actual) <= actual * 0.10
+			fin = net >= 0
+		"lost":
+			ana = absf(bid - actual) <= actual * 0.10
+			fin = bid <= _analysis_range(a)[1]
+		"passed":
+			ana = would_net < 0
+			fin = would_net < 0
+		"forfeit":
+			ana = false
+			fin = would_net < -_deposit(a)
+	var stars := int(inv) + int(ana) + int(fin)
+	stars_total += stars
+	txt += "\n판단 평가:  조사 %s   분석 %s   재무 %s" % [_star(inv), _star(ana), _star(fin)]
+	result.text += txt
+	Juice.pop_in(result)
 	next_btn.visible = true
+	busy = false
 
 
-func _play_delayed(name: String, sec: float) -> void:
-	get_tree().create_timer(sec).timeout.connect(_play.bind(name))
+func _star(on: bool) -> String:
+	return "[color=%s]★[/color]" % GOLD if on else "[color=%s]☆[/color]" % MUTED
 
 
 func _on_next() -> void:
+	if busy:
+		return
 	_play("click")
 	if finished:
 		idx = 0
@@ -549,15 +743,17 @@ func _show_end() -> void:
 		wins, auctions.size(), GOLD, stars_total, max_stars,
 		GOLD, fmt(cash), color, "+" if net >= 0 else "", fmt(net), GOLD, grade]
 	detail.text = ""
+	range_label.text = ""
 	photo.texture = null
 	photo_caption.text = ""
 	bid_row.visible = false
 	quiz_row.visible = false
+	action_row.visible = false
 	result.visible = false
 	next_btn.text = "다시 시작"
 	next_btn.visible = true
 	_play("win" if grade in ["S", "A"] else "lose")
-	_say("등급 %s! 수고했어요. 조사 → 판단 → 입찰, 실전 경매도 똑같아요." % grade)
+	_say("등급 %s! 수고했어요. 조사 → 판단 → 입찰 → 정산, 실전 경매도 똑같아요." % grade)
 
 
 func _say(msg: String) -> void:

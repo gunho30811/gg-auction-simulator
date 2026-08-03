@@ -37,10 +37,6 @@ static func breakdown(a: Dictionary, bid: int, rules: Dictionary) -> Array:
 
 	items.append({"name": "인지세", "amount": int(rules["stamp_tax"]["amount"])})
 
-	var evict := int(rules["eviction_cost"].get(a["occupancy"], 0))
-	if evict > 0:
-		items.append({"name": "명도비용 (%s)" % a["occupancy"], "amount": evict})
-
 	if int(a.get("unpaid_mgmt_fee", 0)) > 0:
 		items.append({"name": "미납 관리비 인수", "amount": int(a["unpaid_mgmt_fee"])})
 
@@ -56,3 +52,21 @@ static func total(items: Array) -> int:
 	for i in items:
 		t += int(i["amount"])
 	return t
+
+
+## 명도 선택지 [{key, label, cost, months, note}]
+static func eviction_options(a: Dictionary, rules: Dictionary) -> Array:
+	var e: Dictionary = rules["eviction"].get(a.get("occupancy", "공실"), rules["eviction"]["공실"])
+	var nego := int(e["negotiate"])
+	var has_dividend := false
+	for tn in a.get("tenants", []):
+		if tn.get("dividend_demand", false):
+			has_dividend = true
+	var nego_note := ""
+	if has_dividend and nego > 0:
+		nego = int(nego * float(rules.get("dividend_negotiate_factor", 1.0)))
+		nego_note = "배당 임차인 — 명도확인서가 협상 카드 (이사비 절감)"
+	return [
+		{"key": "negotiate", "label": "이사비 협상", "cost": nego, "months": int(e["months_negotiate"]), "note": nego_note},
+		{"key": "enforce", "label": "인도명령·강제집행", "cost": int(e["enforce"]), "months": int(e["months_enforce"]), "note": "잔금 후 6개월 내 신청 필수"},
+	]

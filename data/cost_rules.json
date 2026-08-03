@@ -1,7 +1,10 @@
 {
-  "_comment": "낙찰 후 발생 비용 규칙. 모든 수치는 지지옥션 검수 대상. rate는 낙찰가 대비 비율, amount는 원 단위 고정액.",
+  "_comment": "낙찰 후 발생 비용·절차 규칙. 모든 수치는 지지옥션 검수 대상. rate는 낙찰가 대비 비율, amount는 원 단위 고정액.",
 
   "house_kinds": ["아파트", "다세대", "연립", "단독주택", "주택"],
+
+  "bid_deposit_rate": 0.10,
+  "_bid_deposit": "매수신청보증금 = 최저매각가격의 10%. 잔금 미납(포기) 시 몰수",
 
   "acquisition_tax": {
     "_comment": "취득세 (1주택자 유상취득 기준). 주택 6~9억 구간은 (가액×2/3억-3)% 누진 공식 적용",
@@ -29,16 +32,18 @@
     "min_amount": 1000000
   },
 
-  "eviction_cost": {
-    "_comment": "명도비용 추정 (이사비 협의 ~ 강제집행). 점유 유형별 기본값",
-    "공실": 0,
-    "소유자점유": 3000000,
-    "임차인점유": 2000000,
-    "유치권신고": 15000000
-  },
-
   "stamp_tax": {
     "_comment": "인지세 (1억 초과~10억 이하 15만원 구간을 기본값으로 단순화)",
     "amount": 150000
-  }
+  },
+
+  "eviction": {
+    "_comment": "명도 선택지: negotiate=이사비 협상(빠름), enforce=인도명령·강제집행(잔금 후 6개월 내 신청, 계고 포함 1~3개월+). months는 소요 개월 표시용",
+    "공실": { "negotiate": 0, "enforce": 0, "months_negotiate": 0, "months_enforce": 0 },
+    "소유자점유": { "negotiate": 3000000, "enforce": 4500000, "months_negotiate": 1, "months_enforce": 3 },
+    "임차인점유": { "negotiate": 2500000, "enforce": 4000000, "months_negotiate": 1, "months_enforce": 3 },
+    "유치권신고": { "negotiate": 15000000, "enforce": 10000000, "months_negotiate": 2, "months_enforce": 8 }
+  },
+  "dividend_negotiate_factor": 0.4,
+  "_dividend_negotiate": "배당받는 임차인은 배당금 수령에 낙찰자의 명도확인서가 필요 → 협상 이사비가 크게 내려감 (계수)"
 }
