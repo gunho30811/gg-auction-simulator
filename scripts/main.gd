@@ -938,7 +938,7 @@ func _digit_row(parent: Control, title: String, amount: int) -> void:
 	grid.add_theme_constant_override("v_separation", 1)
 	row.add_child(grid)
 	for u in units:
-		var h := _paper_label(u, 9, HORIZONTAL_ALIGNMENT_CENTER)
+		var h := _paper_label(u, 10, HORIZONTAL_ALIGNMENT_CENTER)
 		h.add_theme_color_override("font_color", Color("777777"))
 		grid.add_child(h)
 	var s := str(amount)
@@ -1080,7 +1080,7 @@ func _show_bid_form() -> void:
 	_digit_row(box, "입찰가격", pending_bid)
 	_digit_row(box, "보증금액", _deposit(a))
 	box.add_child(_paper_label("보증의 제공방법 :  [V] 현금·자기앞수표    [  ] 보증서", 13))
-	box.add_child(_paper_label("※ 입찰가격은 수정할 수 없으므로, 수정을 요하는 때에는 새 용지를 사용하십시오.", 10))
+	box.add_child(_paper_label("※ 입찰가격은 수정할 수 없으므로, 수정을 요하는 때에는 새 용지를 사용하십시오.", 11))
 	box.add_child(_hline())
 
 	Juice.pop_in(paper_panel)
