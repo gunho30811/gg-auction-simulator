@@ -2,6 +2,7 @@ extends Node
 ## 게임 설정 싱글톤 (autoload: Game) — 입찰 준비 화면에서 채워짐
 
 var capital := 2_000_000_000
+var simple_bid := false  # 기일입찰표 상세 과정 생략
 var region: PackedStringArray = []  # 주소 앞 토큰 경로 (예: ["인천", "남동구"]). 빈 배열 = 전체
 var kinds: Array = []               # 허용 용도 문자열 (빈 = 전체)
 var series_label := "전체"

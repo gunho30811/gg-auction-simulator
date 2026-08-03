@@ -348,6 +348,12 @@ func _build_ui() -> void:
 	pass_btn.pressed.connect(func() -> void: _ceremony(0, true))
 	_style_button(pass_btn, false)
 	bid_row.add_child(pass_btn)
+	var simple_chk := CheckButton.new()
+	simple_chk.text = "간단 입찰"
+	simple_chk.tooltip_text = "기일입찰표 작성 과정을 생략하고 바로 제출합니다"
+	simple_chk.button_pressed = Game.simple_bid
+	simple_chk.toggled.connect(func(on: bool) -> void: Game.simple_bid = on)
+	bid_row.add_child(simple_chk)
 
 	next_btn = Button.new()
 	next_btn.text = "다음 물건 ▶"
@@ -647,7 +653,10 @@ func _on_bid() -> void:
 		_play("wrong")
 		return
 	pending_bid = bid
-	_show_bid_form()
+	if Game.simple_bid:
+		_quick_submit()
+	else:
+		_show_bid_form()
 
 
 ## 개찰 세리머니: UI가 걷히고 법정이 줌인 — 집행관이 단상에서 금액을 호명
@@ -1037,6 +1046,8 @@ func _show_bid_form() -> void:
 	spot.add_child(stamp_node)
 	bidder_row.add_child(spot)
 
+	box.add_child(_paper_label("주민등록번호 :  9●●●●●-●●●●●●●          전화번호 :  010-****-****", 12))
+	box.add_child(_paper_label("주　소 :  서울특별시 지지구 낙찰로 1번지", 12))
 	_digit_row(box, "입찰가격", pending_bid)
 	_digit_row(box, "보증금액", _deposit(a))
 	box.add_child(_paper_label("보증의 제공방법 :  [V] 현금·자기앞수표    [  ] 보증서", 13))
@@ -1167,10 +1178,10 @@ func _pack_bid_env() -> void:
 	if small_env:
 		small_env.visible = false
 	big_env = _envelope_panel("e6d3a3", "8a6f42", "기 일 입 찰 봉 투",
-		"입찰표 + 보증봉투 재중 · 봉함 후 날인\n─ ─ ─ 절취선 (입찰자용 수취증) ─ ─ ─", "5a4326")
+		"─ ─ 절취선 (입찰자용 수취증 · 집행관인) ─ ─\n입찰표 + 보증봉투 재중 · 제출자: 지지 (인)\n접는선을 접어 스테이플러(찍개)로 봉함", "5a4326")
 	_center_in_form(big_env)
 	form_btn.text = "수취증 받고 투함"
-	_say("집행관이 절취선에 날인해줍니다. 수취증은 개찰 때까지 잘 보관하세요!")
+	_say("사건번호가 안 보이게 접어서 찍개로 콱! 참, 봉투 뒷면엔 '절대로 풀칠 금지'라고 쓰여 있어요 ㅎㅎ")
 
 
 func _take_receipt_and_drop() -> void:
@@ -1179,7 +1190,7 @@ func _take_receipt_and_drop() -> void:
 	form_step = 4
 	_play("click")
 	# 수취증 절취 — 화면 구석으로 이동해 보관
-	receipt = _envelope_panel("efe7cf", "8a6f42", "입찰자용 수취증", "사건번호 · 집행관 날인", "5a4326")
+	receipt = _envelope_panel("efe7cf", "8a6f42", "입찰자용 수취증", "보증금 반환 시 제시 · 집행관 날인", "5a4326")
 	form_layer.add_child(receipt)
 	await get_tree().process_frame
 	receipt.position = big_env.position + Vector2(big_env.size.x * 0.55, -30)
@@ -1196,6 +1207,27 @@ func _take_receipt_and_drop() -> void:
 	_play("click")
 	form_layer.queue_free()
 	form_layer = null
+	_form_submitted()
+
+
+## 간단 입찰: 입찰표 과정을 생략하고 봉투만 슉 —
+func _quick_submit() -> void:
+	busy = true
+	bid_row.visible = false
+	quiz_row.visible = false
+	var env := _envelope_panel("e6d3a3", "8a6f42", "기 일 입 찰 봉 투",
+		"%s · 보증금 재중 (간단 제출)" % fmt(pending_bid), "5a4326")
+	add_child(env)
+	await get_tree().process_frame
+	env.position = (size - env.size) / 2.0
+	Juice.pop_in(env)
+	_play("click")
+	await get_tree().create_timer(0.75).timeout
+	var drop := env.create_tween().set_parallel(true)
+	drop.tween_property(env, "position:y", env.position.y + 320.0, 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	drop.tween_property(env, "modulate:a", 0.0, 0.5)
+	await drop.finished
+	env.queue_free()
 	_form_submitted()
 
 
