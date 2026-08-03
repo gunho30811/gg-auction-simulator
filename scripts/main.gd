@@ -4,7 +4,8 @@ extends Control
 
 const START_CASH := 2_000_000_000
 const IMG_DIR := "res://data/images/"
-const SFX_NAMES := ["click", "gavel", "win", "lose", "correct", "wrong", "coin"]
+const SFX_NAMES := ["click", "gavel", "win", "lose", "correct", "wrong", "coin",
+	"nakchal", "drumroll", "v_open", "v_last", "v_rank1", "v_rank2", "v_rank3", "v_rank4", "v_rank5"]
 
 # 개찰 리액션 캐릭터 (좌석 위치는 화면 비율 좌표, 발밑 기준)
 const CHAR_TEX := ["res://assets/art/char_bidder1.png", "res://assets/art/char_bidder2.png",
@@ -37,6 +38,8 @@ var views: PackedStringArray = []  # 액자 표시 목록: [일러스트, 실사
 
 var sfx := {}
 var sfx_player: AudioStreamPlayer
+var voice_player: AudioStreamPlayer
+var drum_player: AudioStreamPlayer
 
 var cash_label: Label
 var photo: TextureRect
@@ -68,8 +71,15 @@ func _ready() -> void:
 	for n in SFX_NAMES:
 		sfx[n] = load("res://assets/sfx/%s.wav" % n)
 	sfx_player = AudioStreamPlayer.new()
-	sfx_player.volume_db = -6.0
+	sfx_player.volume_db = -4.0
 	add_child(sfx_player)
+	voice_player = AudioStreamPlayer.new()
+	voice_player.volume_db = -1.0
+	add_child(voice_player)
+	drum_player = AudioStreamPlayer.new()
+	drum_player.stream = null
+	drum_player.volume_db = -11.0
+	add_child(drum_player)
 	_build_ui()
 	_show_auction()
 
@@ -77,6 +87,11 @@ func _ready() -> void:
 func _play(name: String) -> void:
 	sfx_player.stream = sfx[name]
 	sfx_player.play()
+
+
+func _voice(name: String) -> void:
+	voice_player.stream = sfx[name]
+	voice_player.play()
 
 
 func _update_cash() -> void:
@@ -653,24 +668,31 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 	tw.tween_property(dim, "color:a", 0.08, 0.6)
 	tw.tween_property(court, "scale", Vector2(1.14, 1.14), 6.0).set_trans(Tween.TRANS_SINE)
 	_call("지금부터 %s 개찰을 시작하겠습니다." % a["case_no"])
+	_voice("v_open")
 	_say("두구두구...")
-	await get_tree().create_timer(1.3).timeout
+	await get_tree().create_timer(2.2).timeout
 
+	drum_player.stream = sfx["drumroll"]
+	drum_player.play()
 	for i in entries.size():
 		var e: Dictionary = entries[i]
+		var rank := entries.size() - i
 		if i == entries.size() - 1:
 			_call("마지막 봉투입니다.")
-			await get_tree().create_timer(1.0).timeout
+			_voice("v_last")
+			await get_tree().create_timer(1.7).timeout
 		_play("click")
-		_call("%s — %s!" % [e["who"], fmt(int(e["amt"]))])
+		_voice("v_rank%d" % clampi(rank, 1, 5))
+		_call("%d순위 — %s, %s!" % [rank, e["who"], fmt(int(e["amt"]))])
 		e["spr"] = _pop_char(e)
-		await get_tree().create_timer(0.9).timeout
+		await get_tree().create_timer(1.5).timeout
 
+	drum_player.stop()
 	var top: Dictionary = entries[entries.size() - 1]
 	top["win"] = true
-	_play("gavel")
-	Juice.shake(self)
-	_call("최고가 %s — %s 님, 낙찰!" % [fmt(int(top["amt"])), top["who"]])
+	_play("nakchal")  # 땅!땅!땅! + "낙찰입니다! 축하합니다!" + 스팅어
+	Juice.shake(self, 10.0)
+	_call("낙찰입니다! 축하합니다, %s 님!" % top["who"])
 
 	# 리액션: 낙찰자는 점프+별, 나머지는 시무룩하게 가라앉음
 	for e in entries:
@@ -687,7 +709,7 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 			var sad := spr.create_tween().set_parallel(true)
 			sad.tween_property(spr, "modulate", Color(0.5, 0.5, 0.58, 0.9), 0.45)
 			sad.tween_property(spr, "position:y", spr.position.y + 28.0, 0.55)
-	await get_tree().create_timer(1.4).timeout
+	await get_tree().create_timer(2.6).timeout  # 스팅어(3.2초) 여운
 
 	# UI 복귀 — 스프라이트 퇴장, 방청객 배경 복귀
 	for e in entries:
