@@ -10,6 +10,9 @@ func _ready() -> void:
 	var bg := ColorRect.new()
 	bg.color = COL_BG
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://assets/shaders/bg.gdshader")
+	bg.material = mat
 	add_child(bg)
 
 	var center := CenterContainer.new()
@@ -27,6 +30,10 @@ func _ready() -> void:
 	jiji.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	jiji.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	box.add_child(jiji)
+	jiji.pivot_offset = Vector2(110, 150)
+	var idle := jiji.create_tween().set_loops()
+	idle.tween_property(jiji, "rotation", 0.04, 1.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	idle.tween_property(jiji, "rotation", -0.04, 1.8).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 	var title := Label.new()
 	title.text = "GG 경매 시뮬레이터"

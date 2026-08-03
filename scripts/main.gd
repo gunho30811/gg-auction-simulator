@@ -49,6 +49,7 @@ var result: RichTextLabel
 var bidders_row: HBoxContainer
 var next_btn: Button
 var speech: Label
+var frame_panel: PanelContainer
 
 
 func _ready() -> void:
@@ -116,10 +117,18 @@ func _make_rich(font_size := 17) -> RichTextLabel:
 
 
 func _build_ui() -> void:
+	var shader_bg := ColorRect.new()
+	shader_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://assets/shaders/bg.gdshader")
+	shader_bg.material = mat
+	add_child(shader_bg)
+	_make_dust()
+
 	var panel := PanelContainer.new()
 	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	var bg := StyleBoxFlat.new()
-	bg.bg_color = COL_BG
+	bg.bg_color = Color(0, 0, 0, 0)
 	panel.add_theme_stylebox_override("panel", bg)
 	add_child(panel)
 
@@ -163,7 +172,8 @@ func _build_ui() -> void:
 	var frame_box := VBoxContainer.new()
 	frame_box.add_theme_constant_override("separation", 6)
 	content.add_child(frame_box)
-	var frame := PanelContainer.new()
+	frame_panel = PanelContainer.new()
+	var frame := frame_panel
 	var frame_style := StyleBoxFlat.new()
 	frame_style.bg_color = Color("efe7d4")
 	frame_style.set_border_width_all(12)
@@ -298,6 +308,10 @@ func _build_ui() -> void:
 	jiji.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	jiji.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	footer.add_child(jiji)
+	jiji.pivot_offset = Vector2(44, 60)
+	var idle := jiji.create_tween().set_loops()
+	idle.tween_property(jiji, "rotation", 0.05, 1.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	idle.tween_property(jiji, "rotation", -0.05, 1.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	var bubble := PanelContainer.new()
 	bubble.add_theme_stylebox_override("panel", _card(COL_CARD, COL_GOLD, 14))
 	bubble.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -307,6 +321,47 @@ func _build_ui() -> void:
 	speech.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	speech.add_theme_color_override("font_color", Color("efe3c2"))
 	bubble.add_child(speech)
+
+
+## 금가루 부유 파티클 — 공간에 깊이감
+func _make_dust() -> void:
+	var img := Image.create(12, 12, false, Image.FORMAT_RGBA8)
+	for x in 12:
+		for y in 12:
+			var d := Vector2(x - 5.5, y - 5.5).length() / 5.5
+			img.set_pixel(x, y, Color(1.0, 0.85, 0.5, clampf(1.0 - d, 0.0, 1.0) * 0.5))
+	var p := CPUParticles2D.new()
+	p.texture = ImageTexture.create_from_image(img)
+	p.amount = 26
+	p.lifetime = 10.0
+	p.preprocess = 10.0
+	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	p.emission_rect_extents = Vector2(700, 400)
+	p.position = Vector2(640, 430)
+	p.direction = Vector2(0, -1)
+	p.spread = 25.0
+	p.gravity = Vector2.ZERO
+	p.initial_velocity_min = 5.0
+	p.initial_velocity_max = 16.0
+	p.scale_amount_min = 0.4
+	p.scale_amount_max = 1.3
+	p.modulate = Color(1, 1, 1, 0.4)
+	add_child(p)
+
+
+## 액자 유사 3D 틸트 — 마우스를 따라 기울어짐
+func _process(_dt: float) -> void:
+	if frame_panel == null:
+		return
+	var r := frame_panel.get_global_rect()
+	frame_panel.pivot_offset = frame_panel.size / 2.0
+	if r.has_point(get_global_mouse_position()):
+		var m := (get_global_mouse_position() - r.position) / r.size - Vector2(0.5, 0.5)
+		frame_panel.rotation = lerpf(frame_panel.rotation, m.x * 0.05, 0.15)
+		frame_panel.scale = frame_panel.scale.lerp(Vector2(1.025, 1.025), 0.15)
+	else:
+		frame_panel.rotation = lerpf(frame_panel.rotation, 0.0, 0.12)
+		frame_panel.scale = frame_panel.scale.lerp(Vector2.ONE, 0.12)
 
 
 func _load_tex(path: String) -> Texture2D:
