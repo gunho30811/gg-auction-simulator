@@ -36,7 +36,8 @@ var busy := false
 var quiz_state := 0  # 0=미응답 1=정답 2=오답
 var seen_tabs := {}
 var market_factor := 1.0  # 훼손 감수 진행 시 시세 하락 반영
-var confirmation_override := ""  # 테스트용 강제 이벤트 (normal/withdraw/appeal/disallow/damage)
+var event_override := ""  # 테스트용: "none"=이벤트 차단, 이벤트 id=강제 발동
+var legal_events: Array = []
 var views: PackedStringArray = []  # 액자 표시 목록: [일러스트, 실사...]
 
 var sfx := {}
@@ -63,6 +64,14 @@ var content: HBoxContainer
 var call_bubble: PanelContainer
 var call_label: Label
 var sprite_layer: Control
+
+# 기일입찰표
+var pending_bid := 0
+var stamped := false
+var form_layer: Control
+var paper_panel: PanelContainer
+var stamp_node: PanelContainer
+var form_btn: Button
 var next_btn: Button
 var speech: Label
 var frame_panel: PanelContainer
@@ -76,6 +85,7 @@ func _ready() -> void:
 	cash = Game.capital
 	cash_shown = cash
 	rules = JSON.parse_string(FileAccess.get_file_as_string("res://data/cost_rules.json"))
+	legal_events = JSON.parse_string(FileAccess.get_file_as_string("res://data/legal_events.json")).get("events", [])
 	for n in SFX_NAMES:
 		sfx[n] = _load_sound(n)
 	sfx_player = AudioStreamPlayer.new()
@@ -631,7 +641,8 @@ func _on_bid() -> void:
 		bid_preview.text = "입찰가를 다시 확인하세요 — '0' 하나 더 쓰면 보증금 몰수입니다!"
 		_play("wrong")
 		return
-	_ceremony(bid, false)
+	pending_bid = bid
+	_show_bid_form()
 
 
 ## 개찰 세리머니: UI가 걷히고 법정이 줌인 — 집행관이 단상에서 금액을 호명
@@ -765,59 +776,95 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 ## 매각결정기일 (낙찰 7일 후) — 허가 여부와 법률 이벤트
 func _confirmation(bid: int) -> void:
 	busy = true
-	var a: Dictionary = auctions[idx]
-	var ev := confirmation_override
-	if ev == "":
-		var rng := RandomNumberGenerator.new()
-		rng.seed = hash(a["case_no"]) + 991
-		var roll := rng.randf()
-		var probs: Dictionary = rules.get("confirmation_events", {})
-		var acc := 0.0
-		ev = "normal"
-		for k in ["withdraw", "appeal", "disallow", "damage"]:
-			acc += float(probs.get(k, 0.0))
-			if roll < acc:
-				ev = k
-				break
-
 	result.text = "\n[b]매각결정기일[/b] — 낙찰 7일 후, 법원이 매각허가 여부를 결정합니다.\n"
 	Juice.pop_in(result)
 	await get_tree().create_timer(1.4).timeout
+	var ev := _roll_event("confirmation")
+	if ev.is_empty():
+		result.text += "매각허가결정 — 즉시항고 없이 확정되었습니다. 잔금(약 30일 내)을 준비하세요.\n"
+		await get_tree().create_timer(1.1).timeout
+		_decision(bid)
+		return
+	_show_event(ev, bid, func() -> void: _decision(bid))
 
-	match ev:
-		"withdraw":
-			result.text += "[color=orange]채무자가 빚을 갚고 경매 취하를 요청했습니다![/color]\n매각기일 이후의 취하에는 [b]최고가매수신고인(나)의 동의[/b]가 필요합니다 (민사집행법 제93조).\n"
-			_say("내가 동의 안 하면 취하 못 해요. 이 물건, 놓치기 아까운 물건인가요?")
-			_actions([
-				{"label": "취하 동의 (보증금 반환, 물건 포기)", "primary": false, "cb": func() -> void: _withdrawn(bid, "채무자 취하에 동의 — 보증금 전액 반환. 채무자는 집을 지켰습니다.")},
-				{"label": "동의 거부 — 경매 계속", "primary": true, "cb": func() -> void: _decision(bid)},
-			])
-		"appeal":
-			result.text += "[color=orange]이해관계인이 즉시항고를 제기했습니다[/color] (민사집행법 제129조).\n심리 끝에 기각 — 하지만 잔금 일정이 약 2개월 지연되었습니다.\n"
-			_say("항고는 대부분 기각되지만, 시간이 그들의 무기예요. 기다림도 비용이죠.")
-			await get_tree().create_timer(2.2).timeout
-			_decision(bid)
-		"disallow":
-			result.text += "[color=salmon][b]매각불허가결정![/b][/color] 송달 누락 등 절차상 하자가 발견되었습니다 (민사집행법 제121·123조).\n보증금 %s은 전액 반환되며, 이 물건은 새매각 절차를 밟습니다.\n" % fmt(_deposit(a))
-			_say("황당하죠? 실전에서도 종종 있어요. 내 잘못이 아니라서 보증금은 돌려받습니다.")
-			_finish_case("", "disallowed", bid, 0, 0)
-		"damage":
-			result.text += "[color=orange]잔금 납부 전 현장 확인 중 부동산의 중대한 훼손을 발견![/color]\n이 경우 매각허가결정 취소를 신청할 수 있습니다 (민사집행법 제127조).\n"
-			_say("이럴 때를 위한 조문이 있어요. 취소하고 나올까요, 감수할까요?")
-			_actions([
-				{"label": "허가취소 신청 (보증금 반환)", "primary": false, "cb": func() -> void: _withdrawn(bid, "매각허가결정 취소 (127조) — 보증금 전액 반환.")},
-				{"label": "감수하고 진행 (시세 하락 감수)", "primary": true, "cb": func() -> void: _damage_proceed(bid)},
-			])
+
+## ── 법률 랜덤 이벤트 엔진 (data/legal_events.json) ──
+func _event_cond_ok(e: Dictionary, a: Dictionary) -> bool:
+	var c: Dictionary = e.get("cond", {})
+	if c.has("kinds") and not (str(a.get("kind", "")) in (c["kinds"] as Array)):
+		return false
+	if c.has("occupancy_not") and str(a.get("occupancy", "")) in (c["occupancy_not"] as Array):
+		return false
+	if c.has("share_sale") and bool(a.get("share_sale", false)) != bool(c["share_sale"]):
+		return false
+	if c.has("has_tenants"):
+		var has: bool = not (a.get("tenants", []) as Array).is_empty()
+		if has != bool(c["has_tenants"]):
+			return false
+	return true
+
+
+func _roll_event(stage: String) -> Dictionary:
+	if event_override == "none":
+		return {}
+	var a: Dictionary = auctions[idx]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(a["case_no"]) + hash(stage)
+	for e in legal_events:
+		if str(e.get("stage", "")) != stage:
+			continue
+		if not _event_cond_ok(e, a):
+			continue
+		if event_override == str(e.get("id", "")):
+			return e
+		if event_override == "" and rng.randf() < float(e.get("prob", 0.0)):
+			return e
+	return {}
+
+
+func _show_event(e: Dictionary, bid: int, next_cb: Callable) -> void:
+	busy = true
+	bid_row.visible = false
+	quiz_row.visible = false
+	result.visible = true
+	result.text += "\n[color=orange][b][돌발] %s[/b][/color]\n%s\n" % [e.get("title", ""), e.get("body", "")]
+	Juice.pop_in(result)
+	_play("wrong")
+	if e.has("jiji"):
+		_say(str(e["jiji"]))
+	var choices: Array = e.get("choices", [])
+	if choices.is_empty():
+		await get_tree().create_timer(2.4).timeout
+		_apply_effects(e.get("effects", {}), bid, next_cb)
+		return
+	var defs: Array = []
+	for ch in choices:
+		var eff: Dictionary = ch.get("effects", {})
+		defs.append({"label": ch["label"], "primary": ch.get("primary", false),
+			"cb": func() -> void: _apply_effects(eff, bid, next_cb)})
+	_actions(defs)
+
+
+func _apply_effects(fx: Dictionary, bid: int, next_cb: Callable) -> void:
+	if fx.has("cash"):
+		cash += int(fx["cash"])
+		_update_cash()
+		result.text += "[color=%s]비용 반영: %s[/color]\n" % [MUTED, fmt(int(fx["cash"]))]
+	if fx.has("market_factor"):
+		market_factor *= float(fx["market_factor"])
+	match str(fx.get("outcome", "continue")):
+		"skip_case":
+			_finish_case("\n이번 입찰은 성립하지 않았습니다 — 보증금은 반환됩니다.", "disallowed", bid, 0, 0)
+		"abort_refund":
+			_withdrawn(bid, str(fx.get("reason", "매수인 지위 소멸 — 보증금 반환.")))
+		"abort_forfeit":
+			var dep := _deposit(auctions[idx])
+			cash -= dep
+			_update_cash()
+			_finish_case("\n[color=salmon]보증금 %s 몰수! %s[/color]" % [fmt(dep), str(fx.get("reason", ""))],
+				"forfeit", bid, 0, 0)
 		_:
-			result.text += "매각허가결정 — 즉시항고 없이 확정되었습니다. 잔금(약 30일 내)을 준비하세요.\n"
-			await get_tree().create_timer(1.1).timeout
-			_decision(bid)
-
-
-func _damage_proceed(bid: int) -> void:
-	market_factor = float(rules.get("damage_market_factor", 0.92))
-	_say("수리비만큼 싸게 산 셈 칠 수도 있죠. 정산에서 확인해봐요.")
-	_decision(bid)
+			next_cb.call()
 
 
 ## 취하 동의·허가취소 등으로 매수인 지위가 소멸 (보증금 반환)
@@ -840,6 +887,247 @@ func _call(msg: String) -> void:
 	call_bubble.visible = true
 	call_label.text = msg
 	Juice.punch(call_bubble)
+
+
+## ── 기일입찰표 (실제 법원 양식 재현) ──────────────────
+func _paper_label(txt: String, fsize := 14, align := HORIZONTAL_ALIGNMENT_LEFT) -> Label:
+	var l := Label.new()
+	l.text = txt
+	l.horizontal_alignment = align
+	l.add_theme_font_size_override("font_size", fsize)
+	l.add_theme_color_override("font_color", Color("1d1d24"))
+	return l
+
+
+func _hline() -> ColorRect:
+	var c := ColorRect.new()
+	c.color = Color("2a2a33")
+	c.custom_minimum_size.y = 2
+	return c
+
+
+func _digit_row(parent: Control, title: String, amount: int) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	parent.add_child(row)
+	var t := _paper_label(title, 13)
+	t.custom_minimum_size.x = 70
+	row.add_child(t)
+	var units := ["천억", "백억", "십억", "억", "천만", "백만", "십만", "만", "천", "백", "십", "일"]
+	var grid := GridContainer.new()
+	grid.columns = units.size()
+	grid.add_theme_constant_override("h_separation", 2)
+	grid.add_theme_constant_override("v_separation", 1)
+	row.add_child(grid)
+	for u in units:
+		var h := _paper_label(u, 9, HORIZONTAL_ALIGNMENT_CENTER)
+		h.add_theme_color_override("font_color", Color("777777"))
+		grid.add_child(h)
+	var s := str(amount)
+	while s.length() < units.size():
+		s = " " + s
+	for i in units.size():
+		var d := Label.new()
+		d.text = "" if s[i] == " " else s[i]
+		d.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		d.custom_minimum_size = Vector2(30, 26)
+		d.add_theme_color_override("font_color", Color("1d1d24"))
+		d.add_theme_font_size_override("font_size", 15)
+		var db := StyleBoxFlat.new()
+		db.bg_color = Color(1, 1, 1, 0.75)
+		db.set_border_width_all(1)
+		db.border_color = Color("999999")
+		d.add_theme_stylebox_override("normal", db)
+		grid.add_child(d)
+	row.add_child(_paper_label("원", 13))
+
+
+func _make_stamp() -> PanelContainer:
+	var s := PanelContainer.new()
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(1, 1, 1, 0)
+	st.set_border_width_all(3)
+	st.border_color = Color("c0392b")
+	st.set_corner_radius_all(21)
+	st.set_content_margin_all(4)
+	s.add_theme_stylebox_override("panel", st)
+	s.custom_minimum_size = Vector2(42, 42)
+	var l := Label.new()
+	l.text = "지지"
+	l.add_theme_color_override("font_color", Color("c0392b"))
+	l.add_theme_font_size_override("font_size", 13)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	s.add_child(l)
+	s.rotation = -0.1
+	return s
+
+
+func _show_bid_form() -> void:
+	busy = true
+	stamped = false
+	if form_layer:
+		form_layer.queue_free()
+	form_layer = Control.new()
+	form_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(form_layer)
+	var shade := ColorRect.new()
+	shade.color = Color(0, 0, 0, 0.55)
+	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	form_layer.add_child(shade)
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	form_layer.add_child(center)
+
+	paper_panel = PanelContainer.new()
+	var ps := StyleBoxFlat.new()
+	ps.bg_color = Color("f7f3e8")
+	ps.set_border_width_all(2)
+	ps.border_color = Color("2a2a33")
+	ps.set_content_margin_all(24)
+	ps.shadow_size = 18
+	ps.shadow_color = Color(0, 0, 0, 0.5)
+	paper_panel.add_theme_stylebox_override("panel", ps)
+	center.add_child(paper_panel)
+
+	var a: Dictionary = auctions[idx]
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	paper_panel.add_child(box)
+
+	box.add_child(_paper_label("기  일  입  찰  표", 26, HORIZONTAL_ALIGNMENT_CENTER))
+	var head := HBoxContainer.new()
+	box.add_child(head)
+	head.add_child(_paper_label("%s 집행관 귀하" % a["court"], 13))
+	var hsp := Control.new()
+	hsp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(hsp)
+	head.add_child(_paper_label("입찰기일 : %s" % a["sale_date"], 13))
+	box.add_child(_hline())
+
+	var case_row := HBoxContainer.new()
+	case_row.add_theme_constant_override("separation", 30)
+	box.add_child(case_row)
+	case_row.add_child(_paper_label("사건번호 :  %s 호" % a["case_no"], 15))
+	case_row.add_child(_paper_label("물건번호 :  1", 15))
+
+	var bidder_row := HBoxContainer.new()
+	bidder_row.add_theme_constant_override("separation", 8)
+	box.add_child(bidder_row)
+	bidder_row.add_child(_paper_label("입찰자 (본인)    성명 :  지 지", 15))
+	bidder_row.add_child(_paper_label("(인)", 11))
+	stamp_node = _make_stamp()
+	stamp_node.visible = false
+	var spot := PanelContainer.new()
+	var sps := StyleBoxFlat.new()
+	sps.bg_color = Color(1, 1, 1, 0)
+	sps.set_border_width_all(1)
+	sps.border_color = Color("aaaaaa")
+	sps.set_content_margin_all(2)
+	spot.add_theme_stylebox_override("panel", sps)
+	spot.custom_minimum_size = Vector2(48, 48)
+	spot.add_child(stamp_node)
+	bidder_row.add_child(spot)
+
+	_digit_row(box, "입찰가격", pending_bid)
+	_digit_row(box, "보증금액", _deposit(a))
+	box.add_child(_paper_label("보증의 제공방법 :  [V] 현금·자기앞수표    [  ] 보증서", 13))
+	box.add_child(_paper_label("※ 입찰가격은 수정할 수 없으므로, 수정을 요하는 때에는 새 용지를 사용하십시오.", 10))
+	box.add_child(_hline())
+
+	var btns := HBoxContainer.new()
+	btns.add_theme_constant_override("separation", 10)
+	box.add_child(btns)
+	var cancel := Button.new()
+	cancel.text = "다시 쓰기"
+	cancel.pressed.connect(func() -> void:
+		form_layer.queue_free()
+		form_layer = null
+		busy = false)
+	btns.add_child(cancel)
+	var bs := Control.new()
+	bs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btns.add_child(bs)
+	form_btn = Button.new()
+	form_btn.text = "도장 찍기"
+	_style_button(form_btn, true)
+	form_btn.pressed.connect(_on_form_btn)
+	btns.add_child(form_btn)
+
+	Juice.pop_in(paper_panel)
+	_say("입찰가격은 수정하면 무효예요! 꼼꼼히 확인하고 도장 찍으세요.")
+
+
+func _on_form_btn() -> void:
+	if not stamped:
+		_stamp()
+	else:
+		_submit_form()
+
+
+func _stamp() -> void:
+	if stamped:
+		return
+	stamped = true
+	stamp_node.visible = true
+	Juice.pop_in(stamp_node)
+	Juice.shake(paper_panel, 5.0, 0.2)
+	_play("click")
+	if form_btn:
+		form_btn.text = "접어서 투함"
+	_say("쾅! 이제 접어서 입찰함에 넣으면 돌이킬 수 없어요.")
+
+
+func _submit_form() -> void:
+	if not stamped or form_layer == null:
+		return
+	busy = true
+	_play("click")
+	paper_panel.pivot_offset = paper_panel.size / 2.0
+	var tw := create_tween()
+	tw.tween_property(paper_panel, "scale:y", 0.08, 0.32).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_IN)
+	tw.tween_property(paper_panel, "scale:x", 0.55, 0.2)
+	await tw.finished
+
+	var env := PanelContainer.new()
+	var es := StyleBoxFlat.new()
+	es.bg_color = Color("d9c9a4")
+	es.set_border_width_all(2)
+	es.border_color = Color("8a6f42")
+	es.set_content_margin_all(30)
+	es.shadow_size = 10
+	es.shadow_color = Color(0, 0, 0, 0.4)
+	env.add_theme_stylebox_override("panel", es)
+	var el := Label.new()
+	el.text = "입 찰 봉 투"
+	el.add_theme_color_override("font_color", Color("5a4326"))
+	el.add_theme_font_size_override("font_size", 20)
+	env.add_child(el)
+	form_layer.add_child(env)
+	paper_panel.visible = false
+	await get_tree().process_frame
+	env.position = (form_layer.size - env.size) / 2.0
+	Juice.pop_in(env)
+	await get_tree().create_timer(0.55).timeout
+
+	var drop := env.create_tween().set_parallel(true)
+	drop.tween_property(env, "position:y", env.position.y + 320.0, 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	drop.tween_property(env, "modulate:a", 0.0, 0.55)
+	await drop.finished
+	_play("click")
+	form_layer.queue_free()
+	form_layer = null
+	_form_submitted()
+
+
+func _form_submitted() -> void:
+	result.text = ""
+	var ev := _roll_event("bid_day")
+	if not ev.is_empty():
+		result.visible = true
+		_show_event(ev, pending_bid, func() -> void: _ceremony(pending_bid, false))
+		return
+	_ceremony(pending_bid, false)
 
 
 ## 좌석에서 벌떡 일어나는 캐릭터 스프라이트
@@ -903,6 +1191,14 @@ func _actions(defs: Array) -> void:
 
 func _pay_balance(bid: int) -> void:
 	_play("click")
+	var ev := _roll_event("possession")
+	if not ev.is_empty():
+		_show_event(ev, bid, func() -> void: _eviction_stage(bid))
+		return
+	_eviction_stage(bid)
+
+
+func _eviction_stage(bid: int) -> void:
 	var a: Dictionary = auctions[idx]
 	if int(rules["eviction"].get(a.get("occupancy", "공실"), {}).get("negotiate", 0)) == 0 \
 			and int(rules["eviction"].get(a.get("occupancy", "공실"), {}).get("enforce", 0)) == 0:
