@@ -31,6 +31,21 @@
 | `unpaid_mgmt_fee` | int | 미납 관리비 (원, 없으면 0) — 공용부분 인수분 |
 | `notes` | string | 특이사항 (게임 내 "주의사항" 카드로 노출) |
 
+## 감정평가·권리분석 요소 (게임의 '조사' 단계에 사용)
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `built_date` | string | 사용승인일 `YYYY-MM-DD` (연식 표시) |
+| `land_share_m2` | number | 대지권 면적(㎡) |
+| `base_rights_date` | string | 말소기준권리 설정일 (최선순위 근저당 등) — 대항력 판정 퀴즈의 핵심 |
+| `base_rights_kind` | string | 말소기준권리 종류 (`근저당권` 등) |
+| `tenants` | array | 임차인 목록: `{label(익명화), deposit, move_in(전입일), fixed_date(확정일자), dividend_demand(배당요구 여부), note}` |
+| `comps` | array | 거래사례비교 자료: `{label, price, date}` — 감정평가서의 사례 데이터 |
+| `price_index_note` | string | 시점수정용 가격지수 코멘트 (감정평가서 Ⅲ장) |
+| `site_notes` | string | 현장조사(임장) 정보 — '현장조사' 탭에서 공개 |
+
+※ `tenants.label`은 실명 대신 "임차인 A" 식으로 익명화해서 주세요 (퍼블릭 저장소).
+
 ## 있으면 좋은 것 (선택)
 
 - `second_bid` (int): 차순위 입찰가 — "간발의 차" 연출용

@@ -5,6 +5,8 @@
     "kind": "아파트",
     "address": "인천 남동구 서창동 서해그랑블아파트 104동 1404호",
     "area_m2": 84.75,
+    "land_share_m2": 51.85,
+    "built_date": "2008-05-30",
     "appraisal_price": 354000000,
     "min_price": 29154000,
     "fail_count": 7,
@@ -18,7 +20,24 @@
     "tenant_deposit": 330000000,
     "tenant_opposing_power": true,
     "unpaid_mgmt_fee": 0,
-    "notes": "대항력 있는 임차권등기(보증금 3.3억, 전입 2021.6.29 < 최선순위 근저당 2022.5.27) — 배당 안 되는 잔액은 매수인이 인수! 낙찰가·응찰자수는 추정치(실제 결과로 교체 필요)"
+    "base_rights_date": "2022-05-27",
+    "base_rights_kind": "근저당권",
+    "tenants": [
+      {
+        "label": "임차인 A (주택임차권등기)",
+        "deposit": 330000000,
+        "move_in": "2021-06-29",
+        "fixed_date": "2021-05-18",
+        "dividend_demand": true,
+        "note": "보증금반환채권은 주택도시보증공사(HUG)가 양수"
+      }
+    ],
+    "comps": [
+      { "label": "같은 단지 103동 9층 · 전용 84.7㎡", "price": 355000000, "date": "2023-11-16" }
+    ],
+    "price_index_note": "남동구 아파트 매매가격지수 90.6(2023.10) → 90.4(2024.05), 보합세",
+    "site_notes": "폐문부재로 내부 확인 불가(감정평가서 기준). 서창초등학교 인근, 단지 앞 상가·GS25.",
+    "notes": "낙찰가·응찰자수는 추정치 (실제 개찰 결과로 교체 필요)"
   },
   {
     "case_no": "2023타경20002 (가상 샘플)",
@@ -26,6 +45,8 @@
     "kind": "다세대",
     "address": "인천 부평구 부평동 (가상 샘플)",
     "area_m2": 59.8,
+    "land_share_m2": 28.4,
+    "built_date": "2014-03-20",
     "appraisal_price": 220000000,
     "min_price": 107800000,
     "fail_count": 2,
@@ -39,7 +60,15 @@
     "tenant_deposit": 0,
     "tenant_opposing_power": false,
     "unpaid_mgmt_fee": 0,
-    "notes": "소유자 점유 중. 권리관계 깨끗한 물건."
+    "base_rights_date": "2019-08-14",
+    "base_rights_kind": "근저당권",
+    "tenants": [],
+    "comps": [
+      { "label": "같은 동 인근 빌라 · 전용 59㎡", "price": 198000000, "date": "2023-08-02" }
+    ],
+    "price_index_note": "부평구 연립·다세대 매매지수 약보합",
+    "site_notes": "소유자 점유 중. 채무자 본인 거주로 명도 협상 필요. 역세권 도보 8분.",
+    "notes": ""
   },
   {
     "case_no": "2024타경30003 (가상 샘플)",
@@ -47,6 +76,8 @@
     "kind": "상가",
     "address": "경기 수원시 팔달구 (가상 샘플)",
     "area_m2": 132.2,
+    "land_share_m2": 41.0,
+    "built_date": "2005-11-10",
     "appraisal_price": 480000000,
     "min_price": 235200000,
     "fail_count": 2,
@@ -60,6 +91,14 @@
     "tenant_deposit": 0,
     "tenant_opposing_power": false,
     "unpaid_mgmt_fee": 5400000,
-    "notes": "유치권 신고 있음 — 소송/합의 비용 각오."
+    "base_rights_date": "2021-02-01",
+    "base_rights_kind": "근저당권",
+    "tenants": [],
+    "comps": [
+      { "label": "인근 1층 상가 · 전용 130㎡", "price": 445000000, "date": "2023-12-11" }
+    ],
+    "price_index_note": "팔달구 상업용 부동산 거래 위축, 공실률 상승 추세",
+    "site_notes": "인테리어 공사업자가 유치권 신고(공사대금 미수 주장). 현재 공실, 출입문에 유치권 행사 안내문.",
+    "notes": ""
   }
 ]

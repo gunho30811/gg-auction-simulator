@@ -25,6 +25,8 @@ tools\Godot_v4.7.1-stable_win64_console.exe --headless --export-release "Windows
 - `scripts/cost_calc.gd` — 부대비용 계산 엔진
 - `scripts/main.gd` — 게임 루프 + UI
 - `assets/characters/jiji.svg` — 도우미 캐릭터 '지지'
+- `assets/sfx/` — 효과음 (프로시저럴 합성, 저작권 무관)
+- `tests/smoke.gd` — headless 스모크 테스트: `tools\...console.exe --headless -s res://tests/smoke.gd`
 
 ## 개발 룰
 
