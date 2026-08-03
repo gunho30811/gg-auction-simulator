@@ -15,4 +15,7 @@ data/raw_pdfs/
 *.csv
 tools_import/
 
+# 렌더 중간산출물 (최종 PNG는 assets/art에 커밋됨)
+art_src/renders/
+
 *.tmp

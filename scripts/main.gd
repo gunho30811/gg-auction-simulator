@@ -371,15 +371,15 @@ func _load_tex(path: String) -> Texture2D:
 	return ImageTexture.create_from_image(img) if img else null
 
 
-## 물건 종류별 귀여운 일러스트
+## 물건 종류별 3D 렌더 일러스트 (제작: art_src/render_props.py)
 func _art_for(kind: String) -> String:
 	if kind == "아파트":
-		return "res://assets/art/apt.svg"
+		return "res://assets/art/apt.png"
 	if kind in ["다세대", "연립", "단독주택", "주택", "빌라"]:
-		return "res://assets/art/villa.svg"
+		return "res://assets/art/villa.png"
 	if kind in ["상가", "오피스텔", "근린시설", "근린상가"]:
-		return "res://assets/art/shop.svg"
-	return "res://assets/art/land.svg"
+		return "res://assets/art/shop.png"
+	return "res://assets/art/land.png"
 
 
 func _view_caption() -> String:
