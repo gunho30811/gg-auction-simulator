@@ -1,6 +1,7 @@
-"""경매 법정 배경 렌더 (1인칭 시점, 1920x1080)
+"""경매 법정 배경 렌더 (1인칭 앞줄 착석 시점, 1920x1080)
 사용: blender -b -P art_src/render_courtroom.py -- <출력.png>
-구도: 입찰자석에 앉아 집행관 단상을 올려다보는 시점. 좌우 책상에 경쟁 입찰자.
+실제 법정 사진 기반 재현: 베이지 패널 벽, 천장 매입등 줄, 꿀색 나무 의자 열,
+단상 뒤 나무 널판 벽 + 금색 법원 엠블럼 + 태극기, 우측 벽걸이 TV(개찰 중계).
 """
 import math
 import os
@@ -15,78 +16,120 @@ OUT = argv[0] if argv else "//courtroom.png"
 
 B.reset()
 
-wood_floor = B.material("wood_floor", (0.52, 0.38, 0.24), rough=0.6)
-wood_wall = B.material("wood_wall", (0.70, 0.57, 0.42), rough=0.85)
-wood_dark = B.material("wood_dark", (0.40, 0.27, 0.16), rough=0.7)
-wood_bench = B.material("wood_bench", (0.46, 0.31, 0.18), rough=0.65)
-gold = B.material("gold_trim", (0.88, 0.70, 0.34), rough=0.35)
-cream = B.material("cream", (0.97, 0.93, 0.82), rough=0.9)
-ceilmat = B.material("ceil", (0.30, 0.25, 0.21), rough=0.95)
-lampmat = B.material("lamp", (1.0, 0.88, 0.6), emission=6.0)
+carpet = B.material("carpet", (0.46, 0.45, 0.43), rough=1.0)
+beige = B.material("beige_wall", (0.80, 0.76, 0.70), rough=0.95)
+beige_dk = B.material("beige_seam", (0.68, 0.64, 0.58), rough=0.95)
+ceil_w = B.material("ceil_white", (0.92, 0.92, 0.90), rough=0.95)
+lightp = B.material("light_panel", (1.0, 0.98, 0.92), emission=5.0)
+honey = B.material("honey_wood", (0.82, 0.60, 0.34), rough=0.6)
+honey_dk = B.material("honey_dark", (0.66, 0.46, 0.25), rough=0.6)
+slat = B.material("slat_wood", (0.78, 0.57, 0.32), rough=0.7)
+gold = B.material("gold_emblem", (0.90, 0.72, 0.34), rough=0.35)
+dark = B.material("dark_box", (0.13, 0.13, 0.15), rough=0.7)
+screen = B.material("tv_screen", (0.65, 0.78, 0.92), emission=1.6, rough=0.3)
+white = B.material("flag_white", (0.97, 0.96, 0.94), rough=0.9)
+red = B.material("taeguk_red", (0.80, 0.15, 0.20), rough=0.8)
+blue = B.material("taeguk_blue", (0.10, 0.22, 0.55), rough=0.8)
 
-# 바닥·벽·천장
-B.box((16, 16, 0.2), (0, 0, -0.1), wood_floor, bevel=0.01)
-B.box((16, 0.3, 7), (0, 5.2, 3.0), wood_wall, bevel=0.02)
-B.box((16, 0.34, 1.4), (0, 5.18, 0.7), wood_dark, bevel=0.02)   # 하부 웨인스코팅
-B.box((0.3, 16, 7), (-7.5, 0, 3.0), wood_dark, bevel=0.02)
-B.box((0.3, 16, 7), (7.5, 0, 3.0), wood_dark, bevel=0.02)
-B.box((16, 16, 0.3), (0, 0, 5.6), ceilmat, bevel=0.01)
+# 바닥(카펫)·벽·천장
+B.box((16, 14, 0.2), (0, 0, -0.1), carpet, bevel=0.01)
+B.box((16, 0.3, 4), (0, 5.4, 1.7), beige, bevel=0.02)
+B.box((0.3, 14, 4), (-6.8, 0, 1.7), beige, bevel=0.02)
+B.box((0.3, 14, 4), (6.8, 0, 1.7), beige, bevel=0.02)
+B.box((16, 14, 0.2), (0, 0, 3.5), ceil_w, bevel=0.01)
 
-# 벽 패널 세로 줄
-for x in (-5.4, -3.2, 3.2, 5.4):
-    B.box((0.18, 0.1, 4.2), (x, 5.05, 2.9), wood_dark, bevel=0.02)
+# 벽 패널 세로 이음선
+for x in (-5.2, -3.4, -1.6, 1.6, 3.4, 5.2):
+    B.box((0.06, 0.05, 3.6), (x, 5.28, 1.7), beige_dk, bevel=0.01)
+for y in (-3.5, -1.0, 1.5, 4.0):
+    B.box((0.05, 0.06, 3.6), (-6.68, y, 1.7), beige_dk, bevel=0.01)
+    B.box((0.05, 0.06, 3.6), (6.68, y, 1.7), beige_dk, bevel=0.01)
 
-# 금색 엠블럼 (단상 위 벽)
-B.cyl(0.62, 0.07, (0, 5.02, 3.7), gold, vertices=48, rot=(math.radians(90), 0, 0))
-B.cyl(0.48, 0.09, (0, 5.0, 3.7), cream, vertices=48, rot=(math.radians(90), 0, 0))
-B.cyl(0.2, 0.11, (0, 4.98, 3.7), gold, vertices=48, rot=(math.radians(90), 0, 0))
+# 천장 매입등 (두 줄)
+for y in (-2.4, -0.9, 0.6, 2.1, 3.6):
+    for x in (-2.6, 0.0, 2.6):
+        B.box((1.7, 0.55, 0.06), (x, y, 3.42), lightp, bevel=0.01)
 
-# 집행관 단상 (연단)
-B.box((6.2, 1.6, 1.0), (0, 3.0, 0.5), wood_dark, bevel=0.06)
-B.box((5.2, 1.3, 1.6), (0, 2.7, 0.8), wood_bench, bevel=0.08)
-B.box((5.6, 1.5, 0.16), (0, 2.7, 1.68), wood_dark, bevel=0.04)
-B.box((4.6, 0.06, 0.2), (0, 2.02, 1.15), gold, bevel=0.02)      # 금색 트림
-# 단상 위 명패 + 의사봉 받침
-B.box((0.9, 0.08, 0.28), (-1.4, 2.1, 1.9), cream, bevel=0.02)
-B.cyl(0.16, 0.06, (1.3, 2.35, 1.79), wood_dark, vertices=32)
+# 단상 뒤 나무 널판 벽
+B.box((8.5, 0.22, 2.9), (0, 5.25, 1.45), slat, bevel=0.02)
+for x in (-3.4, -2.0, -0.7, 0.7, 2.0, 3.4):
+    B.box((0.05, 0.06, 2.7), (x, 5.12, 1.45), honey_dk, bevel=0.01)
 
-# 집행관 캐릭터 (단상 뒤)
+# 금색 법원 엠블럼 (널판 벽 상단)
+B.cyl(0.42, 0.06, (-1.9, 5.10, 2.5), gold, vertices=48, rot=(math.radians(90), 0, 0))
+B.cyl(0.30, 0.08, (-1.9, 5.08, 2.5), B.material("emb_in", (0.95, 0.90, 0.78), rough=0.5), vertices=48, rot=(math.radians(90), 0, 0))
+B.cyl(0.12, 0.10, (-1.9, 5.06, 2.5), gold, vertices=48, rot=(math.radians(90), 0, 0))
+
+# 태극기 (단상 우측)
+B.cyl(0.035, 3.0, (1.9, 4.85, 1.5), B.material("pole", (0.75, 0.73, 0.70), rough=0.5), vertices=12)
+B.ball(0.06, (1.9, 4.85, 3.05), gold)
+B.box((0.85, 0.05, 0.55), (2.36, 4.82, 2.70), white, bevel=0.02)
+B.ball(0.11, (2.33, 4.77, 2.75), red, scale=(1, 0.4, 1))
+B.ball(0.11, (2.40, 4.77, 2.64), blue, scale=(1, 0.4, 1))
+
+# 단상 (연단 + 꿀색 목재)
+B.box((7.0, 1.5, 0.35), (0, 3.4, 0.17), honey_dk, bevel=0.04)
+B.box((5.6, 1.2, 1.35), (0, 3.3, 0.85), honey, bevel=0.06)
+B.box((6.0, 1.4, 0.12), (0, 3.3, 1.58), honey_dk, bevel=0.03)
+B.box((4.6, 0.05, 0.16), (0, 2.68, 1.12), gold, bevel=0.02)
+
+# 개찰대 (단상 앞 긴 테이블 — TV 중계에 잡히는 곳)
+B.box((3.0, 0.9, 0.06), (0, 1.9, 0.75), honey, bevel=0.02)
+B.box((2.8, 0.8, 0.7), (0, 1.9, 0.37), honey_dk, bevel=0.04)
+B.box((0.5, 0.35, 0.25), (-0.8, 1.85, 0.9), white, bevel=0.02)   # 입찰함/서류
+B.box((0.4, 0.3, 0.12), (0.7, 1.85, 0.84), beige_dk, bevel=0.02)
+
+# 집행관 (단상 뒤)
 B.sd_character({"name": "of", "hair": (0.22, 0.19, 0.17), "hair_style": "short",
                 "suit": (0.13, 0.15, 0.22), "accessory": "gavel"},
-               origin=(0, 3.1, 1.3), char_scale=1.15)
+               origin=(0, 3.55, 1.05), char_scale=1.15)
 
-# 좌우 입찰자 책상 + 경쟁 입찰자
-B.box((2.0, 1.0, 0.95), (-2.9, 0.2, 0.48), wood_bench, bevel=0.06)
-B.box((2.0, 1.0, 0.95), (2.9, 0.2, 0.48), wood_bench, bevel=0.06)
-B.sd_character({"name": "b1", "hair": (0.22, 0.32, 0.55), "hair_style": "cap",
-                "suit": (0.35, 0.48, 0.70), "accessory": ""},
-               origin=(-2.85, 0.85, 0.42), char_scale=0.92)
-B.sd_character({"name": "b2", "hair": (0.78, 0.78, 0.80), "hair_style": "bun",
-                "suit": (0.63, 0.40, 0.42), "accessory": "glasses"},
-               origin=(2.85, 0.85, 0.42), char_scale=0.92)
+# 벽걸이 TV (정면 우측, 개찰대 중계 화면)
+B.box((1.75, 0.12, 1.0), (4.6, 5.05, 2.5), dark, bevel=0.02)
+B.box((1.58, 0.10, 0.85), (4.6, 4.98, 2.5), screen, bevel=0.01)
+# 좌측 스피커
+B.box((0.16, 0.35, 0.5), (-6.6, 2.5, 2.6), dark, bevel=0.02)
+B.box((0.16, 0.35, 0.5), (6.6, -2.0, 2.6), dark, bevel=0.02)
 
-# 전경 난간 (DOF로 흐려질 요소)
-B.box((9, 0.16, 0.12), (0, -3.0, 0.98), wood_dark, bevel=0.04)
-for x in (-3.4, -1.2, 1.2, 3.4):
-    B.cyl(0.06, 0.9, (x, -3.0, 0.5), wood_dark, vertices=12)
+# 방청석 의자 열 (꿀색 합판 의자 — 사람 없음)
+def chair(x, y):
+    B.box((0.56, 0.5, 0.06), (x, y, 0.46), honey, bevel=0.02)
+    B.box((0.56, 0.06, 0.55), (x, y + 0.26, 0.70), honey, bevel=0.02)
+    B.box((0.5, 0.44, 0.4), (x, y, 0.22), honey_dk, bevel=0.03)
 
-# 천장 랜턴 조명
-for x in (-3.0, 3.0):
-    B.cyl(0.03, 1.0, (x, 1.2, 5.0), wood_dark, vertices=8)
-    B.ball(0.22, (x, 1.2, 4.4), lampmat)
+for row_y in (0.4, -0.9):
+    for cx in (-2.7, -1.5, -0.3, 0.9, 2.1, 3.3):
+        chair(cx - 0.3, row_y)
 
-# 카메라: 입찰자석 1인칭, 단상을 올려다봄
-cam, target = B.camera((0.0, -4.6, 1.3), (0, 2.6, 1.8), lens=30, fstop=2.0)
+# 내 앞줄 등받이 (착석 시점 전경 — DOF로 흐려짐)
+for cx in (-2.1, -0.9, 0.3, 1.5):
+    B.box((1.05, 0.07, 0.45), (cx, -3.45, 0.62), honey, bevel=0.03)
 
-# 조명
-B.three_point_lights(target, key_energy=1.6)
-bpy.ops.object.light_add(type="AREA", location=(0, 0.5, 5.2))
+# 카메라: 앞줄 의자에 앉은 눈높이
+cam, target = B.camera((0.0, -4.7, 1.28), (0, 3.0, 1.45), lens=24, fstop=2.0)
+
+# 조명: 밝은 실내 (매입등 + 부드러운 키)
+bpy.ops.object.light_add(type="AREA", location=(0, 0.5, 3.3))
 top = bpy.context.object
-top.data.energy = 600
-top.data.size = 7
-top.data.color = (1.0, 0.9, 0.72)
+top.data.energy = 420
+top.data.size = 9
+top.data.color = (1.0, 0.97, 0.90)
 top.constraints.new("TRACK_TO").target = target
 
-B.setup_render(OUT, 1920, 1080, transparent=False, world_color=(0.05, 0.045, 0.06), world_strength=1.0)
+bpy.ops.object.light_add(type="SUN", location=(3, -3, 5))
+key = bpy.context.object
+key.data.energy = 0.6
+key.data.color = (1.0, 0.96, 0.88)
+key.data.angle = math.radians(25)
+key.constraints.new("TRACK_TO").target = target
+
+bpy.ops.object.light_add(type="AREA", location=(0, -4.5, 2.5))
+fill = bpy.context.object
+fill.data.energy = 90
+fill.data.size = 6
+fill.data.color = (0.9, 0.92, 1.0)
+fill.constraints.new("TRACK_TO").target = target
+
+B.setup_render(OUT, 1920, 1080, transparent=False, world_color=(0.5, 0.48, 0.45), world_strength=0.28)
 bpy.ops.render.render(write_still=True)
 print("RENDER DONE:", OUT)
