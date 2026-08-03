@@ -20,7 +20,7 @@ window/stretch/aspect="expand"
 
 [gui]
 
-theme/custom_font="res://assets/fonts/NotoSansKR.ttf"
+theme/custom_font="res://assets/fonts/NotoSansKR-Medium.tres"
 
 [rendering]
 
