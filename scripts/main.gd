@@ -5,7 +5,8 @@ extends Control
 const START_CASH := 2_000_000_000
 const IMG_DIR := "res://data/images/"
 const SFX_NAMES := ["click", "gavel", "win", "lose", "correct", "wrong", "coin",
-	"nakchal", "drumroll", "v_open", "v_last", "v_final",
+	"nakchal", "drumroll", "stamp", "tear", "swoosh",
+	"v_open", "v_last", "v_final",
 	"v_rank1", "v_rank2", "v_rank3", "v_rank4", "v_rank5"]
 
 # 개찰 리액션 캐릭터 (좌석 위치는 화면 비율 좌표, 발밑 기준)
@@ -1032,17 +1033,24 @@ func _show_bid_form() -> void:
 	bidder_row.add_theme_constant_override("separation", 8)
 	box.add_child(bidder_row)
 	bidder_row.add_child(_paper_label("입찰자 (본인)    성명 :  지 지", 15))
-	bidder_row.add_child(_paper_label("(인)", 11))
-	stamp_node = _make_stamp()
-	stamp_node.visible = false
 	var spot := PanelContainer.new()
 	var sps := StyleBoxFlat.new()
-	sps.bg_color = Color(1, 1, 1, 0)
-	sps.set_border_width_all(1)
-	sps.border_color = Color("aaaaaa")
-	sps.set_content_margin_all(2)
+	sps.bg_color = Color(0.85, 0.2, 0.2, 0.06)
+	sps.set_border_width_all(2)
+	sps.border_color = Color("d08080")
+	sps.set_corner_radius_all(6)
+	sps.set_content_margin_all(3)
 	spot.add_theme_stylebox_override("panel", sps)
-	spot.custom_minimum_size = Vector2(48, 48)
+	spot.custom_minimum_size = Vector2(64, 64)
+	var spot_hint := Label.new()
+	spot_hint.text = "(인)"
+	spot_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	spot_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	spot_hint.add_theme_color_override("font_color", Color("d08080"))
+	spot.add_child(spot_hint)
+	stamp_node = _make_stamp()
+	stamp_node.custom_minimum_size = Vector2(58, 58)
+	stamp_node.visible = false
 	spot.add_child(stamp_node)
 	bidder_row.add_child(spot)
 
@@ -1138,10 +1146,20 @@ func _stamp() -> void:
 		return
 	form_step = 1
 	stamped = true
+	# 도장이 위에서 크게 내리찍힘
 	stamp_node.visible = true
-	Juice.pop_in(stamp_node)
-	Juice.shake(paper_panel, 5.0, 0.2)
-	_play("click")
+	stamp_node.pivot_offset = stamp_node.custom_minimum_size / 2.0
+	stamp_node.scale = Vector2(3.4, 3.4)
+	stamp_node.modulate.a = 0.3
+	stamp_node.rotation = 0.4
+	var tw := stamp_node.create_tween().set_parallel(true)
+	tw.tween_property(stamp_node, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_IN)
+	tw.tween_property(stamp_node, "modulate:a", 1.0, 0.18)
+	tw.tween_property(stamp_node, "rotation", -0.1, 0.22)
+	tw.chain().tween_callback(func() -> void:
+		_play("stamp")
+		Juice.shake(paper_panel, 9.0, 0.25)
+		Juice.punch(stamp_node, 1.15))
 	form_btn.text = "보증금 봉투에 담기"
 	form_cancel.visible = false  # 날인 후엔 돌이킬 수 없음
 	_say("쾅! 이제 보증금 수표를 흰 소봉투에 담아요.")
@@ -1165,14 +1183,18 @@ func _pack_bid_env() -> void:
 	if form_step != 2:
 		return
 	form_step = 3
-	_play("click")
-	# 입찰표·소봉투 접힘
+	_play("swoosh")
+	# 입찰표·소봉투가 휘리릭 돌며 봉투 속으로
 	paper_panel.pivot_offset = paper_panel.size / 2.0
 	var tw := create_tween().set_parallel(true)
-	tw.tween_property(paper_panel, "scale:y", 0.06, 0.3).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_IN)
-	tw.tween_property(paper_panel, "modulate:a", 0.0, 0.3)
+	tw.tween_property(paper_panel, "rotation", TAU * 2.0, 0.65).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_property(paper_panel, "scale", Vector2(0.04, 0.04), 0.65).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_IN)
+	tw.tween_property(paper_panel, "modulate:a", 0.0, 0.6)
 	if small_env:
-		tw.tween_property(small_env, "modulate:a", 0.0, 0.3)
+		small_env.pivot_offset = small_env.size / 2.0
+		tw.tween_property(small_env, "rotation", -TAU * 1.5, 0.65).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw.tween_property(small_env, "scale", Vector2(0.04, 0.04), 0.65).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_IN)
+		tw.tween_property(small_env, "modulate:a", 0.0, 0.6)
 	await tw.finished
 	paper_panel.visible = false
 	if small_env:
@@ -1180,6 +1202,9 @@ func _pack_bid_env() -> void:
 	big_env = _envelope_panel("e6d3a3", "8a6f42", "기 일 입 찰 봉 투",
 		"─ ─ 절취선 (입찰자용 수취증 · 집행관인) ─ ─\n입찰표 + 보증봉투 재중 · 제출자: 지지 (인)\n접는선을 접어 스테이플러(찍개)로 봉함", "5a4326")
 	_center_in_form(big_env)
+	get_tree().create_timer(0.15).timeout.connect(func() -> void:
+		if big_env:
+			Juice.punch(big_env, 1.12))
 	form_btn.text = "수취증 받고 투함"
 	_say("사건번호가 안 보이게 접어서 찍개로 콱! 참, 봉투 뒷면엔 '절대로 풀칠 금지'라고 쓰여 있어요 ㅎㅎ")
 
@@ -1188,23 +1213,38 @@ func _take_receipt_and_drop() -> void:
 	if form_step != 3 or big_env == null:
 		return
 	form_step = 4
-	_play("click")
-	# 수취증 절취 — 화면 구석으로 이동해 보관
+	# 수취증이 봉투 상단에 붙어 있다가 — 들썩들썩, 북— 찢어짐
 	receipt = _envelope_panel("efe7cf", "8a6f42", "입찰자용 수취증", "보증금 반환 시 제시 · 집행관 날인", "5a4326")
 	form_layer.add_child(receipt)
 	await get_tree().process_frame
-	receipt.position = big_env.position + Vector2(big_env.size.x * 0.55, -30)
-	Juice.pop_in(receipt)
+	receipt.pivot_offset = Vector2(0, receipt.size.y)
+	receipt.position = big_env.position + Vector2(big_env.size.x * 0.12, -receipt.size.y * 0.5)
+	var wob := receipt.create_tween()
+	wob.tween_property(receipt, "rotation", -0.06, 0.09)
+	wob.tween_property(receipt, "rotation", 0.05, 0.09)
+	wob.tween_property(receipt, "rotation", -0.04, 0.08)
+	await wob.finished
+	_play("tear")
+	Juice.shake(big_env, 6.0, 0.18)
+	var rip := receipt.create_tween().set_parallel(true)
+	rip.tween_property(receipt, "rotation", -0.38, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	rip.tween_property(receipt, "position", receipt.position + Vector2(-45, -55), 0.16)
+	await rip.finished
+	# 구석에 보관
 	var keep := receipt.create_tween().set_parallel(true)
-	keep.tween_property(receipt, "position", Vector2(30, form_layer.size.y - 140), 0.6).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
-	keep.tween_property(receipt, "scale", Vector2(0.75, 0.75), 0.6)
-	await get_tree().create_timer(0.65).timeout
-	# 입찰봉투 투함
+	keep.tween_property(receipt, "position", Vector2(30, form_layer.size.y - 150), 0.55).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
+	keep.tween_property(receipt, "rotation", -0.1, 0.55)
+	keep.tween_property(receipt, "scale", Vector2(0.72, 0.72), 0.55)
+	await get_tree().create_timer(0.6).timeout
+	# 입찰봉투 투함 (휘릭 기울며 낙하)
+	_play("swoosh")
+	big_env.pivot_offset = big_env.size / 2.0
 	var drop := big_env.create_tween().set_parallel(true)
-	drop.tween_property(big_env, "position:y", big_env.position.y + 340.0, 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	drop.tween_property(big_env, "rotation", 0.5, 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	drop.tween_property(big_env, "position:y", big_env.position.y + 360.0, 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	drop.tween_property(big_env, "modulate:a", 0.0, 0.55)
 	await drop.finished
-	_play("click")
+	_play("stamp")
 	form_layer.queue_free()
 	form_layer = null
 	_form_submitted()
@@ -1223,11 +1263,15 @@ func _quick_submit() -> void:
 	Juice.pop_in(env)
 	_play("click")
 	await get_tree().create_timer(0.75).timeout
+	_play("swoosh")
+	env.pivot_offset = env.size / 2.0
 	var drop := env.create_tween().set_parallel(true)
+	drop.tween_property(env, "rotation", 0.45, 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	drop.tween_property(env, "position:y", env.position.y + 320.0, 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	drop.tween_property(env, "modulate:a", 0.0, 0.5)
 	await drop.finished
 	env.queue_free()
+	_play("stamp")
 	_form_submitted()
 
 
