@@ -1299,6 +1299,27 @@ func _take_receipt_and_drop() -> void:
 	_form_submitted()
 
 
+## 명도 완료 — 점유자가 보따리를 메고 화면을 가로질러 떠남
+func _mover_leaves() -> void:
+	var mv := TextureRect.new()
+	mv.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	mv.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	mv.texture = load("res://assets/art/char_mover.png")
+	mv.size = Vector2(150, 150)
+	mv.pivot_offset = Vector2(75, 150)
+	mv.position = Vector2(size.x * 0.34, size.y - 190)
+	mv.modulate.a = 0.0
+	sprite_layer.add_child(mv)
+	var walk := mv.create_tween().set_parallel(true)
+	walk.tween_property(mv, "modulate:a", 1.0, 0.3)
+	walk.tween_property(mv, "position:x", -180.0, 2.6).set_trans(Tween.TRANS_SINE)
+	walk.chain().tween_callback(mv.queue_free)
+	# 걸음 흔들림
+	var bob := mv.create_tween().set_loops(6)
+	bob.tween_property(mv, "position:y", mv.position.y - 9.0, 0.22).set_trans(Tween.TRANS_SINE)
+	bob.tween_property(mv, "position:y", mv.position.y, 0.22).set_trans(Tween.TRANS_SINE)
+
+
 ## 간단 입찰: 입찰표 과정을 생략하고 봉투만 슉 —
 func _quick_submit() -> void:
 	busy = true
@@ -1478,6 +1499,8 @@ func _settle_won(bid: int, evict_cost: int, evict_label: String, months: int) ->
 	var net := market - bid - tot
 	cash += net
 
+	if months > 0 or evict_cost > 0:
+		_mover_leaves()
 	result.text = "\n[b]정산[/b] — 낙찰가 %s, 명도: %s (%d개월)\n" % [fmt(bid), evict_label, months]
 	var lines: Array = []
 	for it in items:

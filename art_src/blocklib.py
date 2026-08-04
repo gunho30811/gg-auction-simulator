@@ -117,6 +117,16 @@ def sd_character(cfg, origin=(0, 0, 0), char_scale=1.0, face_dir=-1):
         wood = material("gavel_wood", (0.55, 0.36, 0.2), rough=0.7)
         cyl(0.035 * s, 0.5 * s, P(0.55, 0, 0.75), wood, rot=(0, math.radians(15), 0))
         cyl(0.11 * s, 0.3 * s, P(0.62, 0, 0.98), wood, rot=(math.radians(90), 0, 0))
+    elif acc == "bundle":
+        # 어깨에 둘러멘 보따리 (이사 짐)
+        cloth = material("bundle_cloth_%s" % cfg["name"], cfg.get("bundle_color", (0.95, 0.88, 0.60)), rough=0.95)
+        ball(0.40 * s, P(-0.62, fy * -0.30, 1.28), cloth, scale=(1, 0.92, 0.88))
+        # 매듭 두 갈래
+        ball(0.12 * s, P(-0.72, fy * -0.34, 1.62), cloth, scale=(0.8, 0.8, 1.3))
+        ball(0.10 * s, P(-0.52, fy * -0.28, 1.60), cloth, scale=(0.8, 0.8, 1.2))
+        # 보따리를 받치는 팔 (어깨 → 위로 뻗음)
+        ball(0.13 * s, P(-0.40, fy * 0.02, 0.62), suit)
+        ball(0.11 * s, P(-0.46, fy * -0.06, 0.86), skin)
     elif acc == "ribbon":
         rb = material("ribbon", (0.85, 0.31, 0.42), rough=0.8)
         ball(0.05 * s, P(0, fy * 0.23, 0.56), rb)
