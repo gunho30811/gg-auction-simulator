@@ -19,3 +19,5 @@ tools_import/
 art_src/renders/
 
 *.tmp
+
+image.png
