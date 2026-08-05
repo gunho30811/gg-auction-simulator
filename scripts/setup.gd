@@ -29,7 +29,7 @@ var start_btn: Button
 
 
 func _ready() -> void:
-	auctions = JSON.parse_string(FileAccess.get_file_as_string("res://data/sample_auctions.json"))
+	auctions = JSON.parse_string(FileAccess.get_file_as_string("res://data/auctions.json"))
 	taxonomy = JSON.parse_string(FileAccess.get_file_as_string("res://data/usage_taxonomy.json"))
 	taxonomy.erase("_comment")
 	_build_ui()

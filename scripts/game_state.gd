@@ -31,6 +31,7 @@ func kind_allowed(kind: String) -> bool:
 func filter_auctions(auctions: Array) -> Array:
 	var out: Array = []
 	for a in auctions:
-		if kind_allowed(str(a.get("kind", ""))) and region_match(str(a.get("address", ""))):
+		# kind_tax는 선택 UI(usage_taxonomy)의 이름, kind는 화면 표시용 원래 이름
+		if kind_allowed(str(a.get("kind_tax", a.get("kind", "")))) and region_match(str(a.get("address", ""))):
 			out.append(a)
 	return out

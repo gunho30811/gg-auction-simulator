@@ -8,6 +8,14 @@ def reset():
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
 
+def srgb(hexcode):
+    """'#rrggbb'(화면에서 뽑은 색) → Blender Base Color(선형).
+    view_transform이 Standard라 이렇게 넣어야 참고 이미지와 같은 색으로 렌더된다."""
+    h = hexcode.lstrip("#")
+    return tuple((v / 12.92) if v <= 0.04045 else (((v + 0.055) / 1.055) ** 2.4)
+                 for v in (int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4)))
+
+
 def material(name, color, emission=0.0, rough=0.85):
     if name in bpy.data.materials:
         return bpy.data.materials[name]
@@ -49,6 +57,19 @@ def cyl(radius, depth, loc, mat, vertices=24, rot=(0, 0, 0)):
     return o
 
 
+def rod(p0, p1, radius, mat, vertices=16):
+    """두 점을 잇는 막대 (작대기·팔 등)."""
+    import mathutils
+    a, b = mathutils.Vector(p0), mathutils.Vector(p1)
+    d = b - a
+    bpy.ops.mesh.primitive_cylinder_add(vertices=vertices, radius=radius, depth=d.length, location=(a + b) / 2)
+    o = bpy.context.object
+    o.rotation_mode = "QUATERNION"
+    o.rotation_quaternion = d.to_track_quat("Z", "Y")
+    o.data.materials.append(mat)
+    return o
+
+
 SKIN = (1.0, 0.87, 0.76)
 SKIN_BLUSH = (0.98, 0.62, 0.55)
 EYE = (0.16, 0.12, 0.10)
@@ -65,7 +86,7 @@ def sd_character(cfg, origin=(0, 0, 0), char_scale=1.0, face_dir=-1):
     def P(x, y, z):
         return (ox + x * s, oy + y * s, oz + z * s)
 
-    skin = material("skin", SKIN, rough=0.7)
+    skin = material("skin_%s" % cfg["name"], cfg.get("skin", SKIN), rough=0.7)
     hair = material("hair_%s" % cfg["name"], cfg["hair"], rough=0.75)
     suit = material("suit_%s" % cfg["name"], cfg["suit"], rough=0.9)
     white = material("shirt", (0.98, 0.97, 0.94), rough=0.9)
@@ -76,7 +97,8 @@ def sd_character(cfg, origin=(0, 0, 0), char_scale=1.0, face_dir=-1):
 
     # 몸통 (정장) + 셔츠 + 팔
     box((0.66 * s, 0.44 * s, 0.6 * s), P(0, 0, 0.32), suit, bevel=0.12 * s)
-    box((0.16 * s, 0.05 * s, 0.34 * s), P(0, fy * 0.225, 0.42), white, bevel=0.03 * s)
+    if cfg.get("accessory") != "bundle":  # 이사 캐릭터는 정장이 아니라 민무늬 상의
+        box((0.16 * s, 0.05 * s, 0.34 * s), P(0, fy * 0.225, 0.42), white, bevel=0.03 * s)
     ball(0.13 * s, P(-0.38, 0, 0.42), suit)
     ball(0.13 * s, P(0.38, 0, 0.42), suit)
 
@@ -96,7 +118,7 @@ def sd_character(cfg, origin=(0, 0, 0), char_scale=1.0, face_dir=-1):
         ball(0.17 * s, P(0, fy * -0.38, 1.42), hair)
     elif style == "cap":
         ball(0.53 * s, P(0, fy * -0.06, 1.14), hair, scale=(1, 0.95, 0.8))
-        cyl(0.56 * s, 0.05 * s, P(0, fy * 0.18, 1.13), hair, rot=(math.radians(8 * fy), 0, 0))
+        cyl(0.54 * s, 0.05 * s, P(0, fy * 0.18, 1.19), hair, rot=(math.radians(15 * fy), 0, 0))
 
     # 눈 + 하이라이트 + 볼터치 + 입
     for sx in (-1, 1):
@@ -118,15 +140,23 @@ def sd_character(cfg, origin=(0, 0, 0), char_scale=1.0, face_dir=-1):
         cyl(0.035 * s, 0.5 * s, P(0.55, 0, 0.75), wood, rot=(0, math.radians(15), 0))
         cyl(0.11 * s, 0.3 * s, P(0.62, 0, 0.98), wood, rot=(math.radians(90), 0, 0))
     elif acc == "bundle":
-        # 어깨에 둘러멘 보따리 (이사 짐)
+        # 작대기에 보따리를 매달아 어깨 너머로 멘 모습 (참고 만화 그림)
         cloth = material("bundle_cloth_%s" % cfg["name"], cfg.get("bundle_color", (0.95, 0.88, 0.60)), rough=0.95)
-        ball(0.40 * s, P(-0.62, fy * -0.30, 1.28), cloth, scale=(1, 0.92, 0.88))
-        # 매듭 두 갈래
-        ball(0.12 * s, P(-0.72, fy * -0.34, 1.62), cloth, scale=(0.8, 0.8, 1.3))
-        ball(0.10 * s, P(-0.52, fy * -0.28, 1.60), cloth, scale=(0.8, 0.8, 1.2))
-        # 보따리를 받치는 팔 (어깨 → 위로 뻗음)
-        ball(0.13 * s, P(-0.40, fy * 0.02, 0.62), suit)
-        ball(0.11 * s, P(-0.46, fy * -0.06, 0.86), skin)
+        pole = material("pole_%s" % cfg["name"], cfg.get("pole_color", (0.20, 0.15, 0.10)), rough=0.8)
+        rod(P(0.52, fy * 0.36, 0.48), P(-0.98, fy * -0.28, 1.66), 0.035 * s, pole)
+        # 가슴 앞에서 작대기를 쥔 팔 + 손 (얼굴을 가리지 않게 바깥쪽으로)
+        rod(P(0.38, 0, 0.42), P(0.48, fy * 0.32, 0.50), 0.11 * s, suit)
+        ball(0.115 * s, P(0.50, fy * 0.34, 0.49), skin)
+        # 보따리 — 작대기 끝에 매달림, 매듭 두 갈래가 위로
+        ball(0.34 * s, P(-0.90, fy * -0.26, 1.24), cloth, scale=(1, 0.92, 0.9))
+        ball(0.10 * s, P(-1.00, fy * -0.30, 1.54), cloth, scale=(0.8, 0.8, 1.3))
+        ball(0.09 * s, P(-0.78, fy * -0.24, 1.53), cloth, scale=(0.8, 0.8, 1.2))
+        # 성큼성큼 걸어나가는 다리 (참고 이미지의 회색 바지·검은 신발)
+        leg = material("leg_%s" % cfg["name"], cfg.get("leg_color", (0.09, 0.09, 0.09)), rough=0.9)
+        shoe = material("shoe_%s" % cfg["name"], cfg.get("shoe_color", (0.05, 0.05, 0.05)), rough=0.6)
+        for sx, ang in ((-1, 20), (1, -20)):
+            cyl(0.095 * s, 0.56 * s, P(sx * 0.20, 0, -0.16), leg, rot=(0, math.radians(ang), 0))
+            ball(0.13 * s, P(sx * 0.33, fy * 0.05, -0.42), shoe, scale=(0.85, 1.35, 0.55))
     elif acc == "ribbon":
         rb = material("ribbon", (0.85, 0.31, 0.42), rough=0.8)
         ball(0.05 * s, P(0, fy * 0.23, 0.56), rb)

@@ -87,7 +87,7 @@ var frame_panel: PanelContainer
 
 
 func _ready() -> void:
-	auctions = JSON.parse_string(FileAccess.get_file_as_string("res://data/sample_auctions.json"))
+	auctions = JSON.parse_string(FileAccess.get_file_as_string("res://data/auctions.json"))
 	var filtered: Array = Game.filter_auctions(auctions)
 	if not filtered.is_empty():
 		auctions = filtered
@@ -528,11 +528,15 @@ func _show_auction() -> void:
 	var age := ""
 	if a.get("built_date", "") != "":
 		age = " | %s년 사용승인" % a["built_date"].substr(0, 4)
-	info.text = ("[b]%s — %s[/b]  [color=%s](%d / %d)[/color]\n%s | %s\n전용 %.1f㎡ | 대지권 %.1f㎡%s | 점유: %s\n\n" +
+	# 토지 물건은 건물 전용면적이 없다 — 토지면적만 표시
+	var area_txt := "전용 %.1f㎡ | 대지권 %.1f㎡" % [float(a["area_m2"]), float(a.get("land_share_m2", 0.0))]
+	if float(a["area_m2"]) <= 0.0:
+		area_txt = "토지 %.1f㎡" % float(a.get("land_share_m2", 0.0))
+	info.text = ("[b]%s — %s[/b]  [color=%s](%d / %d)[/color]\n%s | %s\n%s%s | 점유: %s\n\n" +
 		"감정가: [b][color=%s]%s[/color][/b]\n최저매각가격: [b][color=%s]%s[/color][/b]  (유찰 %d회)\n" +
 		"입찰보증금(최저가 10%%): [b]%s[/b] — 낙찰 후 잔금 포기 시 몰수!\n매각기일: %s") % [
 		a["case_no"], a["kind"], MUTED, idx + 1, auctions.size(),
-		a["court"], a["address"], a["area_m2"], a.get("land_share_m2", 0.0), age, a["occupancy"],
+		a["court"], a["address"], area_txt, age, a["occupancy"],
 		GOLD, fmt(int(a["appraisal_price"])), GOLD, fmt(int(a["min_price"])),
 		int(a["fail_count"]), fmt(_deposit(a)), a["sale_date"]]
 
@@ -693,7 +697,11 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 		entries.append({"amt": my_bid, "who": "나 (지지)", "mine": true})
 	entries.sort_custom(func(x, y) -> bool: return x["amt"] < y["amt"])
 
-	# 캐릭터 스프라이트 배정 (호명 시 좌석에서 일어남)
+	# 캐릭터 스프라이트 배정 (호명 시 좌석에서 일어남) — 매 회차 얼굴·자리 무작위
+	var pool := CHAR_TEX.duplicate()
+	var seats := SLOTS.duplicate()
+	pool.shuffle()
+	seats.shuffle()
 	var slot_i := 0
 	for e in entries:
 		if e["mine"]:
@@ -701,9 +709,9 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 			e["pos"] = Vector2(0.5, 1.06)
 			e["px"] = 250.0
 		else:
-			e["tex"] = CHAR_TEX[slot_i % 4]
-			e["pos"] = SLOTS[slot_i % SLOTS.size()]
-			e["px"] = 160.0
+			e["tex"] = pool[slot_i % pool.size()]
+			e["pos"] = seats[slot_i % seats.size()]
+			e["px"] = randf_range(148.0, 176.0)  # 앞뒤 줄 느낌으로 크기도 조금씩 다르게
 			slot_i += 1
 		e["spr"] = null
 
@@ -1048,7 +1056,7 @@ func _show_bid_form() -> void:
 	case_row.add_theme_constant_override("separation", 30)
 	box.add_child(case_row)
 	case_row.add_child(_paper_label("사건번호 :  %s 호" % a["case_no"], 15))
-	case_row.add_child(_paper_label("물건번호 :  1", 15))
+	case_row.add_child(_paper_label("물건번호 :  %d" % int(a.get("mul_no", 1)), 15))
 
 	var bidder_row := HBoxContainer.new()
 	bidder_row.add_theme_constant_override("separation", 8)
@@ -1076,7 +1084,7 @@ func _show_bid_form() -> void:
 	bidder_row.add_child(spot)
 
 	box.add_child(_paper_label("주민등록번호 :  9●●●●●-●●●●●●●          전화번호 :  010-****-****", 12))
-	box.add_child(_paper_label("주　소 :  서울특별시 지지구 낙찰로 1번지", 12))
+	box.add_child(_paper_label("주　소 :  %s" % a["address"], 12))
 	_digit_row(box, "입찰가격", pending_bid)
 	_digit_row(box, "보증금액", _deposit(a))
 	box.add_child(_paper_label("보증의 제공방법 :  [V] 현금·자기앞수표    [  ] 보증서", 13))
@@ -1203,7 +1211,8 @@ func _pack_deposit_env() -> void:
 	_play("click")
 	var a: Dictionary = auctions[idx]
 	small_env = _envelope_panel("fdfcf7", "9a9a9a", "매수신청보증봉투",
-		"수표 %s 재중 · 봉함 후 날인" % fmt(_deposit(a)), "3a3a44")
+		"사건번호 %s 호   물건번호 %d\n소재지 : %s\n수표 %s 재중 · 봉함 후 날인" % [
+			a["case_no"], int(a.get("mul_no", 1)), a["address"], fmt(_deposit(a))], "3a3a44")
 	_center_in_form(small_env, 40.0)
 	paper_panel.modulate.a = 0.55
 	form_btn.text = "입찰봉투에 넣기"
@@ -1214,6 +1223,7 @@ func _pack_bid_env() -> void:
 	if form_step != 2:
 		return
 	form_step = 3
+	var a: Dictionary = auctions[idx]
 	# 1) 3D 플립 — 종이가 뒤로 돌아 뒷면(위임장 서식)이 보임
 	paper_panel.pivot_offset = paper_panel.size / 2.0
 	_play("swoosh")
@@ -1245,7 +1255,10 @@ func _pack_bid_env() -> void:
 	if small_env:
 		small_env.visible = false
 	big_env = _envelope_panel("e6d3a3", "8a6f42", "기 일 입 찰 봉 투",
-		"─ ─ 절취선 (입찰자용 수취증 · 집행관인) ─ ─\n입찰표 + 보증봉투 재중 · 제출자: 지지 (인)\n접는선을 접어 스테이플러(찍개)로 봉함", "5a4326")
+		("%s 집행관 귀하 · 매각기일 %s\n사건번호 %s 호   물건번호 %d\n소재지 : %s\n" +
+		"─ ─ 절취선 (입찰자용 수취증 · 집행관인) ─ ─\n입찰표 + 보증봉투 재중 · 제출자: 지지 (인)\n" +
+		"접는선을 접어 스테이플러(찍개)로 봉함") % [
+			a["court"], a["sale_date"], a["case_no"], int(a.get("mul_no", 1)), a["address"]], "5a4326")
 	_center_in_form(big_env)
 	get_tree().create_timer(0.15).timeout.connect(func() -> void:
 		if big_env:
@@ -1263,7 +1276,9 @@ func _take_receipt_and_drop() -> void:
 	form_step = 4
 	form_btn_bar.visible = false
 	# 수취증이 봉투 상단에 붙어 있다가 — 들썩들썩, 북— 찢어짐
-	receipt = _envelope_panel("efe7cf", "8a6f42", "입찰자용 수취증", "보증금 반환 시 제시 · 집행관 날인", "5a4326")
+	receipt = _envelope_panel("efe7cf", "8a6f42", "입찰자용 수취증",
+		"사건번호 %s 호   물건번호 %d\n보증금 반환 시 제시 · 집행관 날인" % [
+			auctions[idx]["case_no"], int(auctions[idx].get("mul_no", 1))], "5a4326")
 	form_layer.add_child(receipt)
 	await get_tree().process_frame
 	receipt.pivot_offset = Vector2(0, receipt.size.y)

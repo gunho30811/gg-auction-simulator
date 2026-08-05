@@ -1,7 +1,10 @@
-# 데이터 스펙 — 지지옥션에서 제공해주실 데이터
+# 데이터 스펙 — 게임이 쓰는 물건 데이터 형식
 
-게임에 실데이터를 넣기 위해 필요한 형식입니다. **JSON 배열** (권장) 또는 같은 컬럼의 CSV(UTF-8)로 주시면 됩니다.
-샘플: `data/sample_auctions.json` (현재 게임은 이 가짜 샘플로 동작 중 — 실데이터로 교체만 하면 됨)
+**현재 상태**: `data/auctions.json` 에 실제 낙찰 물건 **100건**이 들어가 있습니다.
+낙찰 목록 xlsx(5,288건) + 지지옥션 상세 API로 자동 생성되며, 재생성은 사내 스크립트로 합니다.
+`data/sample_auctions.json` 은 형식 참고용 예시로 남겨둡니다.
+
+아래 표의 **자동** 표시는 API에서 그대로 채워지는 필드, **미해결**은 아직 소스가 없는 필드입니다.
 
 ## 물건 데이터 (필수 필드)
 
@@ -18,8 +21,10 @@
 | `sale_date` | string | 매각기일 `YYYY-MM-DD` | `"2024-05-13"` |
 | `winning_bid` | int | **실제 낙찰가 (원)** — 게임의 핵심 | `823500000` |
 | `bidder_count` | int | 응찰자 수 | `7` |
-| `market_price` | int | 당시 시세 추정가 (원) — 손익 정산 기준. 지지옥션 시세 데이터 활용 | `900000000` |
-| `images` | string[] | 사진 파일명 배열 (`data/images/` 폴더에 파일 동봉) | `["12345_1.jpg"]` |
+| `market_price` | int | 당시 시세 (원) — 손익 정산 기준. **미해결**: 상세 API에 없어 현재는 감정가를 대입 중 | `900000000` |
+| `images` | string[] | 사진 파일명 배열 (`data/images/`, 폭 1100px·q80로 축소 저장) | `["0701-2024...-0001_1.jpg"]` |
+| `mul_no` | int | 물건번호 — 입찰표·입찰봉투에 기재 | `1` |
+| `kind_tax` | string | `usage_taxonomy.json` 의 잎 이름 (지역·용도 선택 필터용). 화면 표시는 `kind` | `"단독주택"` |
 
 ## 점유·권리 관계 (명도/인수 비용 계산용)
 
@@ -44,7 +49,23 @@
 | `price_index_note` | string | 시점수정용 가격지수 코멘트 (감정평가서 Ⅲ장) |
 | `site_notes` | string | 현장조사(임장) 정보 — '현장조사' 탭에서 공개 |
 
-※ `tenants.label`은 실명 대신 "임차인 A" 식으로 익명화해서 주세요 (퍼블릭 저장소).
+※ `tenants.label`은 "임차인 A" 식으로 자동 익명화됩니다. 임차인·채무자·낙찰자·채권자 **실명은 저장하지 않습니다** (퍼블릭 저장소).
+
+## 자동/미해결 정리
+
+**API에서 자동으로 채워짐** — case_no, mul_no, court, address, area_m2, land_share_m2,
+appraisal_price, min_price, fail_count, sale_date, **winning_bid**, **bidder_count**, **second_bid**,
+images, occupancy, tenant_deposit, tenant_opposing_power, unpaid_mgmt_fee,
+base_rights_date/kind, tenants, site_notes
+
+**아직 소스 없음 (지지옥션 확인 필요)**
+
+| 필드 | 게임에서 쓰는 곳 | 현재 처리 |
+|---|---|---|
+| `market_price` | 손익 정산·시세 분석 범위 | **감정가로 대체** — 실거래 시세 API/필드를 알려주시면 교체 |
+| `comps` | '실거래·시세' 탭 | 빈 배열 (탭에 "자료 없음") |
+| `price_index_note` | 같은 탭의 가격지수 코멘트 | 빈 값 |
+| `built_date` | 연식 표시 | 빈 값 (표시 생략) |
 
 ## 있으면 좋은 것 (선택)
 

@@ -19,15 +19,18 @@ CHARS = {
     "bidder4": {"name": "b4", "hair": (0.52, 0.33, 0.18), "hair_style": "short", "suit": (0.76, 0.53, 0.35), "accessory": ""},
     "officer": {"name": "of", "hair": (0.22, 0.19, 0.17), "hair_style": "short", "suit": (0.13, 0.15, 0.22), "accessory": "gavel"},
     # 이사 가는 점유자 — 보따리를 둘러멘 모습 (명도 완료 장면)
-    "mover": {"name": "mv", "hair": (0.85, 0.45, 0.18), "hair_style": "short", "suit": (0.62, 0.78, 0.55),
-              "accessory": "bundle", "bundle_color": (0.96, 0.90, 0.62)},
+    # 색은 참고 만화 그림에서 그대로 추출 (tools_import/ref/ref_bundle_person.png)
+    "mover": {"name": "mv", "hair": B.srgb("#ffa33f"), "hair_style": "cap", "suit": B.srgb("#c6dcca"),
+              "accessory": "bundle", "bundle_color": B.srgb("#fff7a0"),
+              "leg_color": B.srgb("#646464"), "shoe_color": B.srgb("#2b2b2b"),
+              "skin": B.srgb("#ffe0be"), "pole_color": B.srgb("#3a2a18")},
 }
 
 B.reset()
 B.sd_character(CHARS[WHO])
 # 보따리처럼 실루엣이 넓은 캐릭터는 카메라를 뒤로 빼서 잘리지 않게
 if CHARS[WHO].get("accessory") == "bundle":
-    cam, target = B.camera((0.9, -3.5, 1.5), (-0.18, 0, 0.95), lens=50)
+    cam, target = B.camera((0.9, -4.4, 1.4), (-0.15, 0, 0.58), lens=50)
 else:
     cam, target = B.camera((0.35, -2.5, 1.25), (0, 0, 0.85), lens=55)
 B.three_point_lights(target, key_energy=1.7)

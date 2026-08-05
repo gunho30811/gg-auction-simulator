@@ -13,11 +13,13 @@ data/raw_pdfs/
 # 내부 데이터·내부 API 연동 도구 — 퍼블릭 저장소 제외
 법원데이터*.csv
 *.csv
+*.xlsx
 tools_import/
 
 # 렌더 중간산출물 (최종 PNG는 assets/art에 커밋됨)
 art_src/renders/
 
+__pycache__/
 *.tmp
 
 image.png
