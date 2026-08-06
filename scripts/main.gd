@@ -37,6 +37,7 @@ var busy := false
 
 # 물건별 조사 상태
 var quiz_state := 0  # 0=미응답 1=정답 2=오답
+var crowd_state := 0  # 응찰자 수 예측: 0=미응답 1=정답 2=오답
 var seen_tabs := {}
 var market_factor := 1.0  # 훼손 감수 진행 시 시세 하락 반영
 var event_override := ""  # 테스트용: "none"=이벤트 차단, 이벤트 id=강제 발동
@@ -46,6 +47,7 @@ var views: PackedStringArray = []  # 액자 표시 목록: [일러스트, 실사
 var sfx := {}
 var sfx_player: AudioStreamPlayer
 var sfx_pb: AudioStreamPlaybackPolyphonic
+var reveal_line: Control   # 개찰 직후 금액 직선
 var skip_fx := false      # 연출 건너뛰기 (아무 키·클릭)
 var last_skip_ms := 0
 var voice_player: AudioStreamPlayer
@@ -58,6 +60,7 @@ var info: RichTextLabel
 var tab_row: HBoxContainer
 var detail: RichTextLabel
 var quiz_row: HBoxContainer
+var crowd_row: HBoxContainer
 var action_row: HBoxContainer
 var range_label: Label
 var bid_row: HBoxContainer
@@ -342,6 +345,18 @@ func _build_ui() -> void:
 		b.pressed.connect(_answer_quiz.bind(q[1]))
 		quiz_row.add_child(b)
 
+	# 응찰자 수 예측 — 경쟁을 읽는 눈. 맞히면 시세 분석 범위가 더 좁아진다.
+	crowd_row = HBoxContainer.new()
+	crowd_row.add_theme_constant_override("separation", 8)
+	crowd_row.visible = false
+	right.add_child(crowd_row)
+	for i in CROWD_BANDS.size():
+		var b := Button.new()
+		b.text = CROWD_BANDS[i][2]
+		_style_button(b, false)
+		b.pressed.connect(_answer_crowd.bind(i))
+		crowd_row.add_child(b)
+
 	result = _make_rich()
 	result.visible = false
 	scroll_box.add_child(result)
@@ -551,6 +566,9 @@ func _show_auction() -> void:
 	quiz_state = 0
 	seen_tabs = {}
 	market_factor = 1.0
+	if reveal_line != null:      # 지난 물건의 금액 직선 치우기
+		reveal_line.queue_free()
+		reveal_line = null
 
 	img_idx = 0
 	views.clear()
@@ -584,6 +602,8 @@ func _show_auction() -> void:
 	_say(Game.line("prologue", Game.purpose if Game.purpose != "" else "전체") if idx == 0
 		else Game.line("case_intro", Game.difficulty_of(a)))
 	quiz_row.visible = false
+	crowd_row.visible = true      # 입찰 전 경쟁 예측 — 응찰자 수 맞히기
+	crowd_state = 0
 	action_row.visible = false
 	_update_range()
 	if idx == 0:
@@ -607,6 +627,7 @@ func _show_tab(which: String) -> void:
 	_update_range()
 	var a: Dictionary = auctions[idx]
 	quiz_row.visible = false
+	crowd_row.visible = false
 	match which:
 		"comps":
 			var t := "[b]■ 실거래·시세[/b]\n입찰가의 기준은 감정가가 아니라 '지금 시세'예요. 감정 시점은 과거입니다.\n\n"
@@ -664,6 +685,30 @@ func _quiz_explain(a: Dictionary) -> String:
 	return "[b]%s[/b] 보증금은 %s\n%s" % [grade, verdict, reason]
 
 
+## 응찰자 수 구간. 실제 데이터에서 경쟁이 붙을수록 최저가 대비 낙찰 배수가 뚜렷이 오른다
+## (1명 1.06배 → 2~3명 1.17 → 4~7명 1.27 → 8명 이상 1.35). 그래서 이건 감이 아니라 실력이다.
+const CROWD_BANDS := [[1, 1, "1명 (나 혼자)"], [2, 3, "2~3명"], [4, 7, "4~7명"], [8, 9999, "8명 이상"]]
+
+
+func _answer_crowd(band: int) -> void:
+	if crowd_state != 0:
+		return
+	var n := int(auctions[idx]["bidder_count"])
+	var truth := 0
+	for i in CROWD_BANDS.size():
+		if n >= int(CROWD_BANDS[i][0]) and n <= int(CROWD_BANDS[i][1]):
+			truth = i
+	crowd_state = 1 if band == truth else 2
+	crowd_row.visible = false
+	_play("correct" if crowd_state == 1 else "wrong")
+	Game.bump("crowd_correct" if crowd_state == 1 else "crowd_wrong")
+	_say("경쟁을 읽었네요. 응찰자가 많을수록 최저가 대비 높게 붙습니다." if crowd_state == 1
+		else "빗나갔어요. 사진·입지·유찰 횟수를 보면 경쟁이 보입니다.")
+	seen_tabs["crowd"] = true      # 맞히든 틀리든 조사 한 단계로 쳐서 분석 범위를 좁힌다
+	var r := _analysis_range(auctions[idx])
+	range_label.text = "내 시세 분석: %s ~ %s  (조사 %d/3 — 조사할수록 좁아져요)" % [fmt(r[0]), fmt(r[1]), seen_tabs.size()]
+
+
 func _answer_quiz(said_assumed: bool) -> void:
 	var a: Dictionary = auctions[idx]
 	var truth := bool(a.get("tenant_opposing_power", false))
@@ -717,6 +762,7 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 	busy = true
 	bid_row.visible = false
 	quiz_row.visible = false
+	crowd_row.visible = false
 	action_row.visible = false
 	var a: Dictionary = auctions[idx]
 	var actual := int(a["winning_bid"])
@@ -793,9 +839,9 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 			await _beat(0.8)
 		_play("click")
 		_voice("v_rank%d" % clampi(rank, 1, 5))
-		_call("%d순위 — %s, %s!" % [rank, e["who"], fmt(int(e["amt"]))])
+		await _call_amount(rank, str(e["who"]), int(e["amt"]))
 		e["spr"] = _pop_char(e)
-		await _beat(1.05)
+		await _beat(0.7)
 
 	drum_player.stop()
 	var top: Dictionary = entries[entries.size() - 1]
@@ -836,6 +882,7 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 	call_bubble.visible = false
 	content.visible = true
 	range_label.visible = true
+	_show_reveal_line(a, my_bid, passed)   # 내 입찰가가 어디쯤이었는지 한 줄로
 
 	if passed:
 		_settle_passed()
@@ -899,6 +946,7 @@ func _show_event(e: Dictionary, bid: int, next_cb: Callable) -> void:
 	busy = true
 	bid_row.visible = false
 	quiz_row.visible = false
+	crowd_row.visible = false
 	result.visible = true
 	await _impact("돌      발", "e07b2c", str(e.get("title", "")))
 	result.text += "\n[color=orange][b][돌발] %s[/b][/color]\n%s\n" % [e.get("title", ""), e.get("body", "")]
@@ -1388,6 +1436,7 @@ func _quick_submit() -> void:
 	busy = true
 	bid_row.visible = false
 	quiz_row.visible = false
+	crowd_row.visible = false
 	var env := _envelope_panel("e6d3a3", "8a6f42", "기 일 입 찰 봉 투",
 		"%s · 보증금 재중 (간단 제출)" % fmt(pending_bid), "5a4326")
 	add_child(env)
@@ -1817,6 +1866,73 @@ func _record(a: Dictionary, kind: String, bid: int, net: int, would_net: int, sc
 			Game.trough("min_net", float(net))
 
 
+## 개찰 직후 "내가 어디쯤이었나"를 한 줄 위에 찍어 보여준다.
+## 숫자 표보다 거리가 먼저 눈에 들어와야 배움이 남는다.
+func _show_reveal_line(a: Dictionary, my_bid: int, passed: bool) -> void:
+	if reveal_line != null:
+		reveal_line.queue_free()
+	var marks: Array = [
+		{"v": int(a["min_price"]), "t": "최저가", "c": MUTED, "up": false},
+		{"v": int(a["appraisal_price"]), "t": "감정가", "c": "8ca0c8", "up": false},
+		{"v": int(a["winning_bid"]), "t": "실제 낙찰", "c": GOLD, "up": true},
+	]
+	if int(a.get("second_bid", 0)) > 0:
+		marks.append({"v": int(a["second_bid"]), "t": "2순위", "c": "9aa0b4", "up": true})
+	if int(a.get("market_price", 0)) > 0:
+		marks.append({"v": int(a["market_price"]), "t": "시세", "c": "7fb389", "up": false})
+	if not passed:
+		marks.append({"v": my_bid, "t": "내 입찰", "c": "e8734a", "up": true})
+
+	var lo := marks[0]["v"] as int
+	var hi := lo
+	for m in marks:
+		lo = mini(lo, int(m["v"]))
+		hi = maxi(hi, int(m["v"]))
+	if hi <= lo:
+		hi = lo + 1
+
+	reveal_line = Control.new()
+	reveal_line.custom_minimum_size = Vector2(0, 108)
+	reveal_line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var font := get_theme_default_font()
+	reveal_line.draw.connect(func() -> void:
+		var w := reveal_line.size.x - 24.0
+		var y := 58.0
+		reveal_line.draw_line(Vector2(12, y), Vector2(12 + w, y), Color(MUTED), 2.0)
+		for m in marks:
+			var x := 12.0 + w * float(int(m["v"]) - lo) / float(hi - lo)
+			var up: bool = m["up"]
+			var col := Color(m["c"])
+			reveal_line.draw_line(Vector2(x, y), Vector2(x, y + (-16.0 if up else 16.0)), col, 2.0)
+			reveal_line.draw_circle(Vector2(x, y), 4.0, col)
+			var label := "%s\n%s" % [m["t"], fmt(int(m["v"]))]
+			var ty := y - 40.0 if up else y + 30.0
+			for i in 2:
+				var line := label.split("\n")[i]
+				var tw := font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
+				reveal_line.draw_string(font, Vector2(clampf(x - tw / 2.0, 0, reveal_line.size.x - tw), ty + i * 13.0),
+					line, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, col))
+	result.get_parent().add_child(reveal_line)
+	result.get_parent().move_child(reveal_line, result.get_index())
+	Juice.pop_in(reveal_line)
+
+
+## 금액을 억 → 만 → 원 순서로 끊어 부른다. 마지막 자리 앞에서 한 박자 뜸을 들여
+## "8억... 2,300만... 5천원!" 처럼 실제 개찰의 호흡을 만든다.
+func _call_amount(rank: int, who: String, amt: int) -> void:
+	var parts := fmt(amt).trim_suffix("원").split(" ", false)
+	var shown := ""
+	for i in parts.size():
+		var last := i == parts.size() - 1
+		if last and parts.size() > 1:
+			await _beat(0.42)
+			_play("click", 1.08)
+		shown += ("" if shown == "" else " ") + parts[i]
+		_call("%d순위 — %s, %s%s" % [rank, who, shown, "원!" if last else "..."])
+		if not last:
+			await _beat(0.36)
+
+
 ## 화면 한복판을 때리는 임팩트 컷 — 큰 사건은 확실히 각인시킨다
 ## _impact("명 도 발 생", "d94a3d", "점유자가 버티고 있습니다")
 func _impact(text: String, col: String, sub := "", sound := "wrong") -> void:
@@ -1952,6 +2068,7 @@ func _show_end() -> void:
 	photo_caption.text = ""
 	bid_row.visible = false
 	quiz_row.visible = false
+	crowd_row.visible = false
 	action_row.visible = false
 	result.visible = false
 	next_btn.text = "다시 시작"

@@ -40,6 +40,8 @@ func _initialize() -> void:
 	main._on_form_btn()           # 수취증 + 투함 → 개찰
 	await create_timer(33.0).timeout  # 투함 연출 + 개찰 세리머니 + 매각결정기일
 	assert(main.action_row.visible, "낙찰 후 잔금/포기 선택지가 보여야 함")
+	assert(main.reveal_line != null and is_instance_valid(main.reveal_line),
+		"개찰 뒤 금액 직선이 떠 있어야 함")
 
 	main.action_row.visible = false
 	main._pay_balance(bid)
