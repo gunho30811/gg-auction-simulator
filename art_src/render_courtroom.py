@@ -101,16 +101,24 @@ B.box((0.16, 0.35, 0.5), (-6.6, 2.5, 2.6), dark, bevel=0.02)
 B.box((0.16, 0.35, 0.5), (6.6, -2.0, 2.6), dark, bevel=0.02)
 
 # 방청석 의자 열 (꿀색 합판 의자)
+# 등받이가 높으면 앉은 사람이 머리만 둥둥 뜬 것처럼 보인다 — 어깨가 드러나는 높이로 낮춘다.
+SEAT_TOP = 0.48
+
+
 def chair(x, y):
-    B.box((0.56, 0.5, 0.06), (x, y, 0.46), honey, bevel=0.02)
-    B.box((0.56, 0.06, 0.55), (x, y - 0.26, 0.70), honey, bevel=0.02)  # 등받이는 카메라 쪽
-    B.box((0.5, 0.44, 0.4), (x, y, 0.22), honey_dk, bevel=0.03)
+    B.box((0.54, 0.48, 0.05), (x, y, SEAT_TOP - 0.03), honey, bevel=0.02)          # 좌판
+    B.box((0.54, 0.06, 0.32), (x, y - 0.25, SEAT_TOP + 0.13), honey, bevel=0.02)   # 등받이(카메라 쪽)
+    for lx in (-0.23, 0.23):                                                        # 다리 — 통짜 상자로 보이지 않게
+        for ly in (-0.20, 0.20):
+            B.box((0.045, 0.045, SEAT_TOP - 0.05), (x + lx, y + ly, (SEAT_TOP - 0.05) / 2), honey_dk, bevel=0.01)
+    B.box((0.5, 0.05, 0.04), (x, y, 0.16), honey_dk, bevel=0.01)                    # 다리 가로대
 
 SEATS = []
-for row_y in (0.4, -0.9):
+for row_y in (1.55, 0.4, -0.9, -2.15):
     for cx in (-2.7, -1.5, -0.3, 0.9, 2.1, 3.3):
         chair(cx - 0.3, row_y)
-        SEATS.append((cx - 0.3, row_y))
+        if row_y >= -0.9:   # 이보다 앞줄에 앉히면 단상을 가린다 — 의자만 둔다
+            SEATS.append((cx - 0.3, row_y))
 
 # 방청객 — 같이 개찰을 기다리는 입찰자들 (뒷모습, 좌석의 2/3 채움)
 if MODE == "crowd":
@@ -122,18 +130,24 @@ if MODE == "crowd":
              (0.76, 0.53, 0.35), (0.50, 0.50, 0.55), (0.25, 0.28, 0.35), (0.85, 0.80, 0.70)]
     STYLES = ["short", "bob", "bun", "cap"]
     random.shuffle(SEATS)
-    for i, (sx, sy) in enumerate(SEATS[:8]):
+    for i, (sx, sy) in enumerate(SEATS[:12]):
+        # 좌판 위에 엉덩이가 닿도록 z를 맞추고, 사람마다 체격·자세를 조금씩 달리해 줄맞춤 느낌을 없앤다
+        s = random.uniform(0.68, 0.78)
         B.sd_character({"name": "crowd%d" % i, "hair": random.choice(HAIRS),
                         "hair_style": random.choice(STYLES), "suit": random.choice(SUITS)},
-                       origin=(sx, sy + 0.05, 0.34), char_scale=0.78, face_dir=1)
+                       origin=(sx + random.uniform(-0.05, 0.05),
+                               sy + random.uniform(-0.03, 0.07),
+                               SEAT_TOP - 0.02 * s),
+                       char_scale=s, face_dir=1)
 
     # 내 옆자리 아저씨 (전경, DOF 블러)
     B.sd_character({"name": "neighbor", "hair": (0.2, 0.17, 0.15), "hair_style": "cap",
-                    "suit": (0.30, 0.33, 0.40)}, origin=(-1.7, -3.35, 0.30), char_scale=0.9, face_dir=1)
+                    "suit": (0.30, 0.33, 0.40)}, origin=(-1.7, -3.35, 0.42), char_scale=0.9, face_dir=1)
 
-# 내 앞줄 등받이 (착석 시점 전경 — DOF로 흐려짐)
-for cx in (-2.1, -0.9, 0.3, 1.5):
-    B.box((1.05, 0.07, 0.45), (cx, -3.45, 0.62), honey, bevel=0.03)
+# 내 바로 앞줄 의자 (착석 시점 전경 — DOF로 흐려짐). 벽처럼 보이지 않게 낮추고 사이를 띄운다
+for cx in (-2.4, -1.2, 0.0, 1.2, 2.4):
+    B.box((0.54, 0.06, 0.32), (cx, -3.45, SEAT_TOP + 0.13), honey, bevel=0.03)
+    B.box((0.54, 0.48, 0.05), (cx, -3.20, SEAT_TOP - 0.03), honey, bevel=0.02)
 
 # 카메라: 앞줄 의자에 앉은 눈높이
 cam, target = B.camera((0.0, -4.7, 1.28), (0, 3.0, 1.45), lens=24, fstop=2.0)

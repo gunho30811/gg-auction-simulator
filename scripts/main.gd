@@ -22,13 +22,15 @@ const COL_MUTED := Color("9aa0b4")
 const GOLD := "#e0b95e"
 const MUTED := "#9aa0b4"
 
-var auctions: Array
+var pool: Array       # 조건에 맞는 물건 전부
+var auctions: Array   # 이번 라운드에 볼 물건 (pool에서 라운드 수만큼 뽑음)
 var rules: Dictionary
 var idx := 0
 var cash := START_CASH
 var cash_shown := START_CASH
 var wins := 0
-var stars_total := 0
+var score_total := 0.0   # 판단 평가표 누적 점수
+var cases_done := 0
 var finished := false
 var img_idx := 0
 var busy := false
@@ -43,6 +45,9 @@ var views: PackedStringArray = []  # 액자 표시 목록: [일러스트, 실사
 
 var sfx := {}
 var sfx_player: AudioStreamPlayer
+var sfx_pb: AudioStreamPlaybackPolyphonic
+var skip_fx := false      # 연출 건너뛰기 (아무 키·클릭)
+var last_skip_ms := 0
 var voice_player: AudioStreamPlayer
 var drum_player: AudioStreamPlayer
 
@@ -87,19 +92,23 @@ var frame_panel: PanelContainer
 
 
 func _ready() -> void:
-	auctions = JSON.parse_string(FileAccess.get_file_as_string("res://data/auctions.json"))
-	var filtered: Array = Game.filter_auctions(auctions)
+	pool = JSON.parse_string(FileAccess.get_file_as_string("res://data/auctions.json"))
+	var filtered: Array = Game.filter_auctions(pool)
 	if not filtered.is_empty():
-		auctions = filtered
+		pool = filtered
+	auctions = Game.shuffled_for_play(pool)  # 조건에 맞는 풀에서 라운드 물건 수만큼 새로 뽑는다
 	cash = Game.capital
 	cash_shown = cash
 	rules = JSON.parse_string(FileAccess.get_file_as_string("res://data/cost_rules.json"))
 	legal_events = JSON.parse_string(FileAccess.get_file_as_string("res://data/legal_events.json")).get("events", [])
 	for n in SFX_NAMES:
 		sfx[n] = _load_sound(n)
+	# 폴리포닉 — 소리 하나가 앞 소리를 끊지 않는다 (수취증 찢는 소리가 도장 소리에 잘리던 문제)
 	sfx_player = AudioStreamPlayer.new()
-	sfx_player.volume_db = -4.0
+	sfx_player.stream = AudioStreamPolyphonic.new()
 	add_child(sfx_player)
+	sfx_player.play()
+	sfx_pb = sfx_player.get_stream_playback() as AudioStreamPlaybackPolyphonic
 	voice_player = AudioStreamPlayer.new()
 	voice_player.volume_db = -1.0
 	add_child(voice_player)
@@ -119,9 +128,27 @@ func _load_sound(name: String) -> AudioStream:
 	return null
 
 
-func _play(name: String) -> void:
-	sfx_player.stream = sfx[name]
-	sfx_player.play()
+func _unhandled_input(e: InputEvent) -> void:
+	# 연출 중 아무거나 누르면 현재 단계를 건너뛴다 (계속 누르면 계속 건너뜀)
+	if busy and (e.is_action_pressed("ui_accept") or (e is InputEventMouseButton and e.pressed)):
+		skip_fx = true
+		last_skip_ms = Time.get_ticks_msec()
+
+
+## 모든 연출 대기는 여기를 지난다 — 속도 설정 반영 + 스킵
+func _beat(sec: float) -> void:
+	var left := sec * Game.fx_speed
+	while left > 0.0 and not skip_fx:
+		left -= get_process_delta_time()
+		await get_tree().process_frame
+
+
+## 같은 소리를 수백 번 듣게 되므로 피치를 조금씩 흔든다 (청각 피로 방지).
+## 법봉·낙찰 스팅어처럼 '한 번뿐인 큰 소리'는 pitch를 1.0으로 고정해 호출한다.
+func _play(name: String, pitch := 0.0) -> void:
+	if sfx_pb == null or sfx[name] == null:
+		return
+	sfx_pb.play_stream(sfx[name], 0.0, -4.0, pitch if pitch > 0.0 else randf_range(0.94, 1.06))
 
 
 func _voice(name: String) -> void:
@@ -454,6 +481,14 @@ func _process(_dt: float) -> void:
 
 
 func _load_tex(path: String) -> Texture2D:
+	# 물건 사진(.jpg)은 임포트하지 않고 원본 그대로 팩에 넣는다 (임포트 시간·용량 절약).
+	# tools_import/keep_photos.py 가 .import를 importer="keep"으로 만들어 둠.
+	if path.get_extension().to_lower() in ["jpg", "jpeg"]:
+		var bytes := FileAccess.get_file_as_bytes(path)
+		var jpg := Image.new()
+		if bytes.size() > 0 and jpg.load_jpg_from_buffer(bytes) == OK:
+			return ImageTexture.create_from_image(jpg)
+		return null
 	if ResourceLoader.exists(path):
 		return load(path)
 	var img := Image.load_from_file(ProjectSettings.globalize_path(path))
@@ -540,7 +575,14 @@ func _show_auction() -> void:
 		GOLD, fmt(int(a["appraisal_price"])), GOLD, fmt(int(a["min_price"])),
 		int(a["fail_count"]), fmt(_deposit(a)), a["sale_date"]]
 
-	detail.text = "[color=%s]입찰 전에 위 탭으로 조사하세요. 조사한 만큼 시세 분석 범위가 좁아지고, 권리 함정이 보입니다.[/color]" % MUTED
+	# 챕터 도입 — 라운드 n번째 물건에 걸린 게 있으면 먼저 보여준다 (data/story.json)
+	var ch := Game.chapter_at(idx + 1)
+	var head := ""
+	if not ch.is_empty():
+		head = "[b][color=%s]%s[/color][/b]\n[color=%s]%s[/color]\n\n" % [GOLD, ch["title"], MUTED, ch["body"]]
+	detail.text = head + "[color=%s]입찰 전에 위 탭으로 조사하세요. 조사한 만큼 시세 분석 범위가 좁아지고, 권리 함정이 보입니다.[/color]" % MUTED
+	_say(Game.line("prologue", Game.purpose if Game.purpose != "" else "전체") if idx == 0
+		else Game.line("case_intro", Game.difficulty_of(a)))
 	quiz_row.visible = false
 	action_row.visible = false
 	_update_range()
@@ -570,8 +612,10 @@ func _show_tab(which: String) -> void:
 			var t := "[b]■ 실거래·시세[/b]\n입찰가의 기준은 감정가가 아니라 '지금 시세'예요. 감정 시점은 과거입니다.\n\n"
 			for c in a.get("comps", []):
 				t += "  · %s — [color=%s]%s[/color] (%s)\n" % [c["label"], GOLD, fmt(int(c["price"])), c["date"]]
-			if a.get("comps", []).is_empty():
-				t += "  (사례 자료 없음)\n"
+			# 국토교통부 실거래 자료로 잡은 시세 — 어디서 나온 값인지 그대로 보여준다
+			if str(a.get("market_source", "")) != "":
+				t += "  · 국토부 실거래 기준: [color=%s]%s[/color]\n" % [MUTED, a["market_source"]]
+				t += "  · 전용/토지 %.1f㎡ 적용\n" % (float(a["area_m2"]) if float(a["area_m2"]) > 0 else float(a.get("land_share_m2", 0.0)))
 			if a.get("price_index_note", "") != "":
 				t += "  · 가격지수: %s\n" % a["price_index_note"]
 			t += "\n[color=%s]→ 위 사례와 지수로 내 분석 범위가 좁아졌어요 (아래 확인).[/color]" % MUTED
@@ -669,6 +713,7 @@ func _on_bid() -> void:
 
 ## 개찰 세리머니: UI가 걷히고 법정이 줌인 — 집행관이 단상에서 금액을 호명
 func _ceremony(my_bid: int, passed: bool) -> void:
+	skip_fx = false
 	busy = true
 	bid_row.visible = false
 	quiz_row.visible = false
@@ -679,7 +724,7 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 
 	var others: Array = []
 	var rng := RandomNumberGenerator.new()
-	rng.seed = hash(a["case_no"]) + 7
+	rng.randomize()  # 경쟁자 구성은 매 회차 다르게 — 실제 2순위 금액만 아래에서 고정
 	for i in n - 1:
 		others.append(int(rng.randf_range(float(int(a["min_price"])), float(actual)) / 10_000.0) * 10_000)
 	if others.size() > 0 and int(a.get("second_bid", 0)) > 0:
@@ -734,22 +779,23 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 	else:
 		_voice("v_open")
 	_say("두구두구...")
-	await get_tree().create_timer(open_wait).timeout
+	await _beat(open_wait)
 
 	drum_player.stream = sfx["drumroll"]
 	drum_player.play()
 	for i in entries.size():
 		var e: Dictionary = entries[i]
 		var rank := entries.size() - i
+		skip_fx = false   # 한 번 누르면 이 호명만, 계속 누르면 계속 건너뛴다
 		if i == entries.size() - 1:
 			_call("마지막 봉투입니다.")
 			_voice("v_last")
-			await get_tree().create_timer(0.8).timeout
+			await _beat(0.8)
 		_play("click")
 		_voice("v_rank%d" % clampi(rank, 1, 5))
 		_call("%d순위 — %s, %s!" % [rank, e["who"], fmt(int(e["amt"]))])
 		e["spr"] = _pop_char(e)
-		await get_tree().create_timer(1.05).timeout
+		await _beat(1.05)
 
 	drum_player.stop()
 	var top: Dictionary = entries[entries.size() - 1]
@@ -774,7 +820,7 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 			var sad := spr.create_tween().set_parallel(true)
 			sad.tween_property(spr, "modulate", Color(0.5, 0.5, 0.58, 0.9), 0.45)
 			sad.tween_property(spr, "position:y", spr.position.y + 28.0, 0.55)
-	await get_tree().create_timer(1.8).timeout  # 스팅어(3.2초) 여운
+	await _beat(1.8)  # 스팅어(3.2초) 여운
 
 	# UI 복귀 — 스프라이트 퇴장, 방청객 배경 복귀
 	for e in entries:
@@ -804,11 +850,11 @@ func _confirmation(bid: int) -> void:
 	busy = true
 	result.text = "\n[b]매각결정기일[/b] — 낙찰 7일 후, 법원이 매각허가 여부를 결정합니다.\n"
 	Juice.pop_in(result)
-	await get_tree().create_timer(0.9).timeout
+	await _beat(0.9)
 	var ev := _roll_event("confirmation")
 	if ev.is_empty():
 		result.text += "매각허가결정 — 즉시항고 없이 확정되었습니다. 잔금(약 30일 내)을 준비하세요.\n"
-		await get_tree().create_timer(0.8).timeout
+		await _beat(0.8)
 		_decision(bid)
 		return
 	_show_event(ev, bid, func() -> void: _decision(bid))
@@ -835,7 +881,7 @@ func _roll_event(stage: String) -> Dictionary:
 		return {}
 	var a: Dictionary = auctions[idx]
 	var rng := RandomNumberGenerator.new()
-	rng.seed = hash(a["case_no"]) + hash(stage)
+	rng.randomize()  # 돌발 사건은 매번 다르게 (같은 물건이라도 결과가 갈린다)
 	for e in legal_events:
 		if str(e.get("stage", "")) != stage:
 			continue
@@ -849,10 +895,12 @@ func _roll_event(stage: String) -> Dictionary:
 
 
 func _show_event(e: Dictionary, bid: int, next_cb: Callable) -> void:
+	Game.bump("legal_events")
 	busy = true
 	bid_row.visible = false
 	quiz_row.visible = false
 	result.visible = true
+	await _impact("돌      발", "e07b2c", str(e.get("title", "")))
 	result.text += "\n[color=orange][b][돌발] %s[/b][/color]\n%s\n" % [e.get("title", ""), e.get("body", "")]
 	Juice.pop_in(result)
 	_play("wrong")
@@ -860,7 +908,7 @@ func _show_event(e: Dictionary, bid: int, next_cb: Callable) -> void:
 		_say(str(e["jiji"]))
 	var choices: Array = e.get("choices", [])
 	if choices.is_empty():
-		await get_tree().create_timer(1.7).timeout
+		await _beat(1.7)
 		_apply_effects(e.get("effects", {}), bid, next_cb)
 		return
 	var defs: Array = []
@@ -1237,7 +1285,7 @@ func _pack_bid_env() -> void:
 	flip2.tween_property(paper_panel, "scale:x", 1.0, 0.15).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	flip2.parallel().tween_property(paper_panel, "modulate", Color(0.94, 0.94, 0.96), 0.15)
 	await flip2.finished
-	await get_tree().create_timer(0.18).timeout
+	await _beat(0.18)
 
 	# 2) 스르륵 — 반 접힌 채 소봉투와 함께 봉투 속으로 말려 들어감
 	_play("swoosh")
@@ -1299,7 +1347,7 @@ func _take_receipt_and_drop() -> void:
 	keep.tween_property(receipt, "position", Vector2(30, form_layer.size.y - 150), 0.35).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
 	keep.tween_property(receipt, "rotation", -0.1, 0.35)
 	keep.tween_property(receipt, "scale", Vector2(0.72, 0.72), 0.35)
-	await get_tree().create_timer(0.35).timeout
+	await _beat(0.35)
 	# 입찰봉투 투함 (휘릭 기울며 낙하)
 	_play("swoosh")
 	big_env.pivot_offset = big_env.size / 2.0
@@ -1347,7 +1395,7 @@ func _quick_submit() -> void:
 	env.position = (size - env.size) / 2.0
 	Juice.pop_in(env)
 	_play("click")
-	await get_tree().create_timer(0.45).timeout
+	await _beat(0.45)
 	_play("swoosh")
 	env.pivot_offset = env.size / 2.0
 	var drop := env.create_tween().set_parallel(true)
@@ -1445,6 +1493,7 @@ func _eviction_stage(bid: int) -> void:
 		_settle_won(bid, 0, "공실 — 즉시 인도", 0)
 		return
 	var opts := CostCalc.eviction_options(a, rules)
+	await _impact("명 도 발 생", "c0392b", "점유자: %s" % str(a["occupancy"]), "gavel")
 	var txt := "\n[b]명도 — 점유자(%s)를 내보내야 합니다[/b]\n" % a["occupancy"]
 	for o in opts:
 		txt += "  · %s: %s, 약 %d개월%s\n" % [o["label"], fmt(int(o["cost"])), int(o["months"]),
@@ -1453,9 +1502,13 @@ func _eviction_stage(bid: int) -> void:
 	_say("명도는 돈이냐 시간이냐의 선택이에요. 배당받는 임차인은 명도확인서가 필요해서 협상이 쉽죠.")
 	_actions([
 		{"label": "%s (%s)" % [opts[0]["label"], fmt(int(opts[0]["cost"]))], "primary": true,
-			"cb": func() -> void: _negotiate(bid, opts)},
+			"cb": func() -> void:
+				Game.bump("negotiates")
+				_negotiate(bid, opts)},
 		{"label": "%s (%s)" % [opts[1]["label"], fmt(int(opts[1]["cost"]))], "primary": false,
-			"cb": func() -> void: _settle_won(bid, int(opts[1]["cost"]), opts[1]["label"], int(opts[1]["months"]))},
+			"cb": func() -> void:
+				Game.bump("enforces")
+				_settle_won(bid, int(opts[1]["cost"]), opts[1]["label"], int(opts[1]["months"]))},
 	])
 
 
@@ -1463,19 +1516,22 @@ func _eviction_stage(bid: int) -> void:
 func _negotiate(bid: int, opts: Array) -> void:
 	var a: Dictionary = auctions[idx]
 	var rng := RandomNumberGenerator.new()
-	rng.seed = hash(a["case_no"]) + 77
+	rng.randomize()  # 이사비 증액 요구도 매번 다르게
 	var cost := int(opts[0]["cost"])
 	if cost > 0 and rng.randf() < 0.35:
 		var demand := int(cost * 1.8 / 10_000) * 10_000
+		await _impact("말 이   바 뀌 었 다", "e07b2c", "\"%s는 주셔야 나갑니다\"" % fmt(demand))
 		result.text = "\n[b]협상 난항![/b] 점유자: \"이사비 [color=%s]%s[/color]는 주셔야 나갑니다.\"" % [GOLD, fmt(demand)]
 		Juice.pop_in(result)
 		_play("wrong")
-		_say("버티기에 들어갔네요. 여기서 밀리면 계속 올라가요. 어떻게 할까요?")
+		_say("도장 찍기 직전에 말을 바꾸네요. 여기서 밀리면 다음엔 더 부릅니다.")
 		_actions([
 			{"label": "요구 수락 (%s)" % fmt(demand), "primary": false,
 				"cb": func() -> void: _settle_won(bid, demand, "이사비 협상 (증액 수락)", int(opts[0]["months"]) + 1)},
 			{"label": "협상 결렬 — 강제집행 (%s)" % fmt(int(opts[1]["cost"])), "primary": true,
-				"cb": func() -> void: _settle_won(bid, int(opts[1]["cost"]), opts[1]["label"], int(opts[1]["months"]))},
+				"cb": func() -> void:
+				Game.bump("enforces")
+				_settle_won(bid, int(opts[1]["cost"]), opts[1]["label"], int(opts[1]["months"]))},
 		])
 		return
 	if cost > 0:
@@ -1485,6 +1541,7 @@ func _negotiate(bid: int, opts: Array) -> void:
 
 func _forfeit(bid: int) -> void:
 	var a: Dictionary = auctions[idx]
+	await _impact("보 증 금 몰 수", "8e2c2c", "재매각 · 나는 재입찰 금지", "lose")
 	var dep := _deposit(a)
 	cash -= dep
 	var market := int(int(a["market_price"]) * market_factor)
@@ -1525,10 +1582,10 @@ func _settle_won(bid: int, evict_cost: int, evict_label: String, months: int) ->
 	lines.append("  [b]총 취득원가: %s[/b]" % fmt(bid + tot))
 	lines.append("  시세 매각: +%s" % fmt(market))
 	for line in lines:
-		await get_tree().create_timer(0.18).timeout
+		await _beat(0.18)
 		_play("click")
 		result.text += line + "\n"
-	await get_tree().create_timer(0.5).timeout
+	await _beat(0.5)
 	var color := "lightgreen" if net >= 0 else "salmon"
 	var txt := "[color=%s][b]순손익: %s%s[/b][/color]\n" % [color, "+" if net >= 0 else "", fmt(net)]
 	_play("win" if net >= 0 else "lose")
@@ -1543,6 +1600,9 @@ func _settle_won(bid: int, evict_cost: int, evict_label: String, months: int) ->
 func _settle_lost(bid: int) -> void:
 	var a: Dictionary = auctions[idx]
 	var actual := int(a["winning_bid"])
+	# 1% 이내로 놓쳤으면 그 아픔을 크게 보여준다
+	if absf(bid - actual) <= actual * 0.01:
+		await _impact("간   발   의   차", "5b6b8a", "%s 차이" % fmt(absf(actual - bid)), "lose")
 	var diff := actual - bid
 	var acc := 100.0 - absf(bid - actual) * 100.0 / actual
 	var would_net := int(a["market_price"]) - actual - CostCalc.total(CostCalc.breakdown(a, actual, rules))
@@ -1576,16 +1636,17 @@ func _settle_lost(bid: int) -> void:
 
 ## 차순위매수신고 결과 (민사집행법 114조): 최고가매수인 미납 시 지위 승계
 func _second_bidder(bid: int, would_net: int) -> void:
+	Game.bump("second_bidder")
 	var a: Dictionary = auctions[idx]
 	var rng := RandomNumberGenerator.new()
-	rng.seed = hash(a["case_no"]) + 314
+	rng.randomize()  # 최고가매수인의 잔금 미납 여부도 매번 다르게
 	result.text += "\n차순위매수신고 접수 — 최고가매수인의 잔금 납부를 기다립니다...\n"
-	await get_tree().create_timer(1.0).timeout
+	await _beat(1.0)
 	if rng.randf() < 0.15:
 		result.text += "[color=%s][b]최고가매수인이 잔금을 미납![/b][/color] 차순위인 내가 매수인 지위를 승계합니다.\n" % GOLD
 		_say("이런 일이 진짜 있어요! 이제 내 가격으로 이 물건을 삽니다.")
 		_play("correct")
-		await get_tree().create_timer(0.8).timeout
+		await _beat(0.8)
 		_decision(bid)
 	else:
 		result.text += "최고가매수인이 잔금을 납부했습니다. 내 보증금은 약 40일 묶였다가 반환되었습니다.\n"
@@ -1611,59 +1672,261 @@ func _settle_passed() -> void:
 	_finish_case(txt, "passed", 0, 0, would_net)
 
 
-## 3축 별점: 조사 완전성 / 분석 정확도 / 재무 판단
-func _finish_case(txt: String, kind: String, bid: int, net: int, would_net: int) -> void:
-	var a: Dictionary = auctions[idx]
+const GRADES := [[90.0, "S"], [80.0, "A"], [70.0, "B"], [60.0, "C"], [50.0, "D"], [-1.0, "F"]]
+
+
+func _grade_of(score: float) -> String:
+	for g in GRADES:
+		if score >= float(g[0]):
+			return str(g[1])
+	return "F"
+
+
+func _bar(score: float) -> String:
+	var on := clampi(int(round(score / 10.0)), 0, 10)
+	return "[color=%s]%s[/color][color=%s]%s[/color]" % [
+		GOLD, "■".repeat(on), MUTED, "□".repeat(10 - on)]
+
+
+## 조사 축 — 얼마나 들여다봤나
+func _score_investigate(a: Dictionary) -> Array:
+	var has_quiz: bool = not (a.get("tenants", []) as Array).is_empty()
+	var tabs := mini(seen_tabs.size(), 3)
+	var note := "조사 탭 %d/3" % tabs
+	if not has_quiz:
+		return [tabs * 100.0 / 3.0, note + " · 임차인 없음(권리 판정 생략)"]
+	var quiz := 40.0 if quiz_state == 1 else 0.0
+	note += " · 권리 판정 " + ("정답" if quiz_state == 1 else ("오답" if quiz_state == -1 else "미응답"))
+	return [tabs * 20.0 + quiz, note]
+
+
+## 분석 축 — 실제 낙찰가를 얼마나 맞췄나 (오차 25%면 0점)
+func _score_analyze(a: Dictionary, bid: int, would_net: int) -> Array:
 	var actual := int(a["winning_bid"])
-	var tenants: Array = a.get("tenants", [])
-	var inv: bool = seen_tabs.size() >= 3 and (tenants.is_empty() or quiz_state == 1)
-	var ana := false
-	var fin := false
+	if bid <= 0:
+		return [100.0, "입찰 포기 — 실제 낙찰자도 손해 본 물건"] if would_net < 0 \
+			else [30.0, "입찰 포기 — 실제로는 수익이 났던 물건"]
+	var err := absf(bid - actual) * 100.0 / maxf(1.0, float(actual))
+	return [clampf(100.0 - err * 4.0, 0.0, 100.0),
+		"입찰 %s / 실제 %s (오차 %.1f%%)" % [fmt(bid), fmt(actual), err]]
+
+
+## 재무 축 — 돈이 남았나, 무리하지 않았나
+func _score_finance(a: Dictionary, kind: String, bid: int, net: int, would_net: int) -> Array:
 	match kind:
 		"won":
-			ana = absf(bid - actual) <= actual * 0.10
-			fin = net >= 0
+			var roi := float(net) * 100.0 / maxf(1.0, float(bid))
+			return [clampf(50.0 + roi * 3.0, 0.0, 100.0),
+				"순손익 %s%s (투입 대비 %+.1f%%)" % ["+" if net >= 0 else "", fmt(net), roi]]
 		"lost":
-			ana = absf(bid - actual) <= actual * 0.10
-			fin = bid <= _analysis_range(a)[1]
+			if would_net < 0:
+				return [100.0, "승자의 저주를 피했다 — 낙찰자는 %s 손해" % fmt(would_net)]
+			if bid <= _analysis_range(a)[1]:
+				return [70.0, "분석 범위 안에서 합리적으로 썼지만 놓쳤다"]
+			return [40.0, "범위를 벗어난 입찰 — 근거 없이 질렀다"]
 		"passed":
-			ana = would_net < 0
-			fin = would_net < 0
+			return [100.0, "피한 게 정답 — 낙찰자는 %s 손해" % fmt(would_net)] if would_net < 0 \
+				else [30.0, "기회를 놓쳤다 — 낙찰자는 +%s 수익" % fmt(would_net)]
 		"forfeit":
-			ana = false
-			fin = would_net < -_deposit(a)
-		"withdrawn":
-			ana = would_net < 0
-			fin = would_net < 0
-		"disallowed":
-			ana = absf(bid - actual) <= actual * 0.10
-			fin = true
-	var stars := int(inv) + int(ana) + int(fin)
-	stars_total += stars
-	txt += "\n판단 평가:  조사 %s   분석 %s   재무 %s" % [_star(inv), _star(ana), _star(fin)]
-	if stars == 3:
-		txt += "   [color=%s][b]— 완벽한 판단![/b][/color]" % GOLD
+			return [10.0 if would_net < -_deposit(a) else 0.0,
+				"보증금 %s 몰수" % fmt(_deposit(a))]
+	return [60.0, "내 판단 밖의 사유로 종결 — 재무 평가 보류"]
+
+
+## 판단 평가표 — 조사 / 분석 / 재무를 100점 만점으로 채점
+func _finish_case(txt: String, kind: String, bid: int, net: int, would_net: int) -> void:
+	var a: Dictionary = auctions[idx]
+	var rows := [
+		["조사", _score_investigate(a), 0.3],
+		["분석", _score_analyze(a, bid, would_net), 0.4],
+		["재무", _score_finance(a, kind, bid, net, would_net), 0.3],
+	]
+	var total := 0.0
+	txt += "\n\n[b]■ 판단 평가표[/b]\n"
+	for r in rows:
+		var s: float = float(r[1][0])
+		total += s * float(r[2])
+		txt += "  %s  %s [b]%3d[/b]  [color=%s]%s[/color]\n" % [r[0], _bar(s), int(round(s)), MUTED, r[1][1]]
+
+	var grade := _grade_of(total)
+	score_total += total
+	cases_done += 1
+	var avg := score_total / cases_done
+	txt += "  [color=%s]─────────────────────────────[/color]\n" % MUTED
+	txt += "  종합  [b]%d점[/b]  등급 [color=%s][b]%s[/b][/color]   [color=%s]누적 %s (%d건 평균 %d점)[/color]" % [
+		int(round(total)), GOLD, grade, MUTED, _grade_of(avg), cases_done, int(round(avg))]
+
+	_record(a, kind, bid, net, would_net, total)
+	txt += _title_lines()
+
+	# 결과 한 줄은 story.json에서 (같은 말이 반복되지 않게 매번 무작위)
+	var mood := str({"won": "won_profit" if net >= 0 else "won_loss",
+		"lost": "lost_curse" if would_net < 0 else "lost_miss",
+		"passed": "passed_right" if would_net < 0 else "passed_wrong",
+		"forfeit": "forfeit"}.get(kind, ""))
+	var say := Game.line("outcome", mood) if mood != "" else ""
+	if grade in ["S", "A"]:
 		Juice.stars_burst(self, Vector2(size.x * 0.5, size.y * 0.6), 16)
-		_say("조사·분석·재무 전부 완벽! 이게 프로의 입찰이에요.")
+		say = "등급 %s! %s" % [grade, say]
+	if say != "":
+		_say(say)
 	result.text += txt
 	Juice.pop_in(result)
 	next_btn.visible = true
 	busy = false
 
 
-func _star(on: bool) -> String:
-	return "[color=%s]★[/color]" % GOLD if on else "[color=%s]☆[/color]" % MUTED
+## 칭호용 누적 기록 (Game에 쌓아 라운드를 다시 시작해도 유지된다)
+func _record(a: Dictionary, kind: String, bid: int, net: int, would_net: int, score: float) -> void:
+	var actual := int(a["winning_bid"])
+	Game.bump("cases_done")
+	Game.bump("score_sum", score)
+	Game.peak("best_score", score)
+	Game.saw(str(a["kind"]), str(a["address"]))
+	if seen_tabs.size() >= 3:
+		Game.bump("tabs_full")
+	if quiz_state == 1:
+		Game.bump("rights_correct")
+	elif quiz_state == -1:
+		Game.bump("rights_wrong")
+	if bid > 0 and actual > 0:
+		Game.peak("best_accuracy", 100.0 - absf(bid - actual) * 100.0 / actual)
+	match kind:
+		"won":
+			Game.bump("wins")
+			Game.bump("total_net", float(net))
+			Game.peak("max_net", float(net))
+			Game.trough("min_net", float(net))
+			Game.bump("wins_" + {"내 집 마련": "home", "월세 받기": "rent",
+				"토지 장기보유": "land", "큰 판": "big"}.get(Game.purpose_of(a), "home"))
+			if Game.difficulty_of(a) == "위험":
+				Game.bump("wins_risky")
+		"lost":
+			Game.bump("losses")
+			if would_net < 0:
+				Game.bump("winners_curse_avoided")
+			if actual > 0 and absf(bid - actual) <= actual * 0.01:
+				Game.bump("near_miss")
+		"passed":
+			Game.bump("passes")
+			if would_net < 0:
+				Game.bump("winners_curse_avoided")
+		"forfeit":
+			Game.bump("forfeits")
+			Game.bump("total_net", float(net))
+			Game.trough("min_net", float(net))
+
+
+## 화면 한복판을 때리는 임팩트 컷 — 큰 사건은 확실히 각인시킨다
+## _impact("명 도 발 생", "d94a3d", "점유자가 버티고 있습니다")
+func _impact(text: String, col: String, sub := "", sound := "wrong") -> void:
+	var layer := Control.new()
+	layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(layer)
+
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.0)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(dim)
+
+	# 좌우로 쫙 벌어지는 색 띠
+	var band := ColorRect.new()
+	band.color = Color(col)
+	band.color.a = 0.92
+	band.size = Vector2(size.x, 132.0)
+	band.position = Vector2(0, size.y * 0.40)
+	band.pivot_offset = band.size / 2.0
+	band.scale = Vector2(0.0, 0.18)
+	layer.add_child(band)
+
+	var box := VBoxContainer.new()
+	box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 2)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(box)
+
+	var big := Label.new()
+	big.text = text
+	big.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	big.add_theme_font_size_override("font_size", 68)
+	big.add_theme_color_override("font_color", Color("fdfdfd"))
+	big.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	big.add_theme_constant_override("outline_size", 12)
+	box.add_child(big)
+	if sub != "":
+		var small := Label.new()
+		small.text = sub
+		small.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		small.add_theme_font_size_override("font_size", 20)
+		small.add_theme_color_override("font_color", Color("fdfdfd"))
+		small.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+		small.add_theme_constant_override("outline_size", 8)
+		box.add_child(small)
+
+	box.pivot_offset = size / 2.0
+	box.scale = Vector2(2.9, 2.9)
+	box.modulate.a = 0.0
+	box.rotation = -0.07
+
+	_play(sound)
+	var tin := create_tween().set_parallel(true)
+	tin.tween_property(band, "scale", Vector2.ONE, 0.13).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+	tin.tween_property(dim, "color", Color(0, 0, 0, 0.45), 0.13)
+	tin.tween_property(box, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tin.tween_property(box, "rotation", 0.0, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tin.tween_property(box, "modulate:a", 1.0, 0.10)
+	await tin.finished
+	Juice.shake(self, 11.0, 0.28)
+
+	await _beat(0.78)
+	var tout := create_tween().set_parallel(true)
+	tout.tween_property(band, "scale", Vector2(1.0, 0.0), 0.16).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
+	tout.tween_property(dim, "color", Color(0, 0, 0, 0.0), 0.20)
+	tout.tween_property(box, "scale", Vector2(1.35, 1.35), 0.20).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tout.tween_property(box, "modulate:a", 0.0, 0.20)
+	await tout.finished
+	layer.queue_free()
+
+
+## 라운드 종료 화면에 지금까지 모은 칭호를 보여준다
+func _earned_summary() -> String:
+	if Game.earned.is_empty():
+		return "[color=%s]아직 얻은 칭호가 없어요. 계속 입찰해 보세요.[/color]" % MUTED
+	var names: Array = []
+	for t in Game.titles_def:
+		if str(t["id"]) in Game.earned:
+			names.append("[color=%s]%s[/color]" % [GOLD, t["name"]])
+	return "[b]칭호 %d / %d[/b]\n%s" % [names.size(), Game.titles_def.size(), "  ·  ".join(names)]
+
+
+## 이번 물건으로 새로 얻은 칭호 (여러 개가 한 번에 터질 수 있어 한 덩어리로 보여준다)
+func _title_lines() -> String:
+	var got := Game.new_titles()
+	if got.is_empty():
+		return ""
+	_play("coin")
+	var t := "\n\n[b][color=%s]★ 새 칭호[/color][/b]\n" % GOLD
+	for g in got:
+		t += "  [color=%s][b]%s[/b][/color] (T%d) — %s\n" % [GOLD, g["name"], int(g["tier"]), g["desc"]]
+		if str(g.get("flavor", "")) != "":
+			t += "     [color=%s]%s[/color]\n" % [MUTED, g["flavor"]]
+	return t
 
 
 func _on_next() -> void:
-	if busy:
+	# 연출 건너뛰려고 누른 클릭이 '다음 물건'까지 눌러버리는 사고 방지
+	if busy or Time.get_ticks_msec() - last_skip_ms < 250:
 		return
 	_play("click")
 	if finished:
 		idx = 0
 		cash = Game.capital
 		wins = 0
-		stars_total = 0
+		score_total = 0.0
+		cases_done = 0
+		auctions = Game.shuffled_for_play(pool)  # 다시 시작하면 풀에서 새로 뽑는다
 		finished = false
 		next_btn.text = "다음 물건 ▶"
 		_show_auction()
@@ -1675,16 +1938,15 @@ func _on_next() -> void:
 func _show_end() -> void:
 	finished = true
 	var net := cash - Game.capital
-	var max_stars := auctions.size() * 3
-	var ratio := float(stars_total) / max_stars
-	var grade := "S" if ratio >= 0.8 else ("A" if ratio >= 0.6 else ("B" if ratio >= 0.4 else "C"))
+	var avg := score_total / maxi(cases_done, 1)
+	var grade := _grade_of(avg)
 	var color := "lightgreen" if net >= 0 else "salmon"
-	info.text = ("[b]라운드 종료[/b]\n\n낙찰 %d건 / 전체 %d건\n판단 별점: [color=%s]%d / %d[/color]\n" +
+	info.text = ("[b]라운드 종료[/b]\n\n낙찰 %d건 / 진행 %d건\n평균 판단 점수: [color=%s]%d점[/color]  %s\n" +
 		"최종 자산: [b][color=%s]%s[/color][/b]\n[color=%s][b]총 손익: %s%s[/b][/color]\n\n" +
 		"[b]최종 등급: [color=%s]%s[/color][/b]") % [
-		wins, auctions.size(), GOLD, stars_total, max_stars,
+		wins, cases_done, GOLD, int(round(avg)), _bar(avg),
 		GOLD, fmt(cash), color, "+" if net >= 0 else "", fmt(net), GOLD, grade]
-	detail.text = ""
+	detail.text = "[color=%s]%s[/color]\n\n%s" % [MUTED, Game.line("epilogue", grade), _earned_summary()]
 	range_label.text = ""
 	photo.texture = null
 	photo_caption.text = ""

@@ -1,0 +1,295 @@
+{
+  "_comment": "칭호 정의. cond의 모든 항목을 AND로 만족하면 획득. stat은 게임 전체 누적값이며 op는 >= <= == > < 만 쓴다. tier 1(흔함)~5(전설).",
+  "titles": [
+    {
+      "id": "first_win",
+      "name": "첫 낙찰",
+      "desc": "처음으로 최고가매수신고인이 되었다.",
+      "flavor": "봉투를 넣을 때 손이 떨렸던 건 아무도 모른다.",
+      "tier": 1,
+      "cond": [{"stat": "wins", "op": ">=", "value": 1}]
+    },
+    {
+      "id": "empty_hands",
+      "name": "빈손 귀가",
+      "desc": "처음으로 남의 이름이 불렸다.",
+      "flavor": "법정에서 문까지, 그 짧은 거리가 제일 길다.",
+      "tier": 1,
+      "cond": [{"stat": "losses", "op": ">=", "value": 1}]
+    },
+    {
+      "id": "quiet_hand",
+      "name": "안 쓴 봉투",
+      "desc": "처음으로 입찰을 포기했다.",
+      "flavor": "안 사는 것도 결정이다. 그것도 아주 어려운 결정.",
+      "tier": 1,
+      "cond": [{"stat": "passes", "op": ">=", "value": 1}]
+    },
+    {
+      "id": "legwork_1",
+      "name": "임장 삼종",
+      "desc": "한 물건의 조사 탭 세 가지를 모두 열어봤다.",
+      "flavor": "서류에 없는 건 현장에 있고, 현장에 없는 건 등기부에 있다.",
+      "tier": 1,
+      "cond": [{"stat": "tabs_full", "op": ">=", "value": 1}]
+    },
+    {
+      "id": "rights_first",
+      "name": "첫 권리분석",
+      "desc": "대항력 판정을 처음으로 맞혔다.",
+      "flavor": "말소기준권리보다 앞서면 인수, 뒤면 소멸. 시작은 여기서부터.",
+      "tier": 1,
+      "cond": [{"stat": "rights_correct", "op": ">=", "value": 1}]
+    },
+    {
+      "id": "incident_first",
+      "name": "돌발 신고식",
+      "desc": "경매 진행 중 돌발 사건을 처음 겪었다.",
+      "flavor": "매각기일은 언제나 예정대로 오지 않는다.",
+      "tier": 1,
+      "cond": [{"stat": "legal_events", "op": ">=", "value": 1}]
+    },
+
+    {
+      "id": "five_wins",
+      "name": "손맛을 알다",
+      "desc": "다섯 건을 낙찰받았다.",
+      "flavor": "한 번 도장을 받아본 사람은 반드시 다시 법정에 온다.",
+      "tier": 2,
+      "cond": [{"stat": "wins", "op": ">=", "value": 5}]
+    },
+    {
+      "id": "negotiator",
+      "name": "이사비 협상가",
+      "desc": "명도를 세 번 대화로 끝냈다.",
+      "flavor": "인도명령보다 빠른 건 봉투 하나와 커피 한 잔이다.",
+      "tier": 2,
+      "cond": [{"stat": "negotiates", "op": ">=", "value": 3}]
+    },
+    {
+      "id": "enforcer",
+      "name": "집행관 동행",
+      "desc": "명도를 세 번 강제집행으로 끝냈다.",
+      "flavor": "문을 여는 방법은 여러 가지고, 그중 제일 비싼 걸 골랐다.",
+      "tier": 2,
+      "cond": [{"stat": "enforces", "op": ">=", "value": 3}]
+    },
+    {
+      "id": "good_eye",
+      "name": "감이 좋다",
+      "desc": "실제 낙찰가와 오차 10% 안으로 입찰해봤다.",
+      "flavor": "시장도 결국 나와 비슷한 숫자를 생각하고 있었다.",
+      "tier": 2,
+      "cond": [{"stat": "best_accuracy", "op": ">=", "value": 90}]
+    },
+    {
+      "id": "trap_dodger",
+      "name": "저주 회피",
+      "desc": "낙찰자가 손해 봤을 물건을 세 번 피했다.",
+      "flavor": "그 물건, 안 사길 잘했다.",
+      "tier": 2,
+      "cond": [{"stat": "winners_curse_avoided", "op": ">=", "value": 3}]
+    },
+    {
+      "id": "deposit_gone",
+      "name": "보증금 헌납",
+      "desc": "잔금을 내지 못해 보증금을 몰수당했다.",
+      "flavor": "법원은 위로하지 않는다. 다만 재매각을 공고할 뿐.",
+      "tier": 2,
+      "cond": [{"stat": "forfeits", "op": ">=", "value": 1}]
+    },
+    {
+      "id": "legwork_10",
+      "name": "발품 근성",
+      "desc": "열 물건의 조사 탭을 빠짐없이 열어봤다.",
+      "flavor": "임장 한 번이 감정평가서 열 장보다 낫다.",
+      "tier": 2,
+      "cond": [{"stat": "tabs_full", "op": ">=", "value": 10}]
+    },
+    {
+      "id": "traveler",
+      "name": "원정 입찰",
+      "desc": "서로 다른 시·도 다섯 곳의 물건을 겪었다.",
+      "flavor": "새벽 기차를 타면 오전 입찰 마감에 맞출 수 있다.",
+      "tier": 2,
+      "cond": [{"stat": "regions_seen", "op": ">=", "value": 5}]
+    },
+
+    {
+      "id": "regular",
+      "name": "법정 단골",
+      "desc": "물건 30건을 진행했다.",
+      "flavor": "입찰법정 뒷자리에 늘 앉아 있는 사람이 있다. 이제 그게 나다.",
+      "tier": 3,
+      "cond": [{"stat": "cases_done", "op": ">=", "value": 30}]
+    },
+    {
+      "id": "second_place",
+      "name": "차순위매수신고인",
+      "desc": "차순위매수신고를 해봤다.",
+      "flavor": "1등이 도망가길 기다리는 자리. 그동안 내 보증금은 묶인다.",
+      "tier": 3,
+      "cond": [{"stat": "second_bidder", "op": ">=", "value": 1}]
+    },
+    {
+      "id": "omnivore",
+      "name": "잡식 입찰자",
+      "desc": "서로 다른 용도 여덟 종을 겪었다.",
+      "flavor": "아파트만 보다 보면 아파트 값만 보인다.",
+      "tier": 3,
+      "cond": [{"stat": "kinds_seen", "op": ">=", "value": 8}]
+    },
+    {
+      "id": "steady_eye",
+      "name": "믿을 만한 눈",
+      "desc": "10건 이상 진행하며 평균 70점을 지켰다.",
+      "flavor": "대박은 없어도 사고도 없다. 그게 실력이다.",
+      "tier": 3,
+      "cond": [
+        {"stat": "cases_done", "op": ">=", "value": 10},
+        {"stat": "avg_score", "op": ">=", "value": 70}
+      ]
+    },
+    {
+      "id": "profit_300m",
+      "name": "3억 클럽",
+      "desc": "누적 순손익 3억 원을 넘겼다.",
+      "flavor": "취득세와 명도비를 다 빼고 남은 숫자다.",
+      "tier": 3,
+      "cond": [{"stat": "total_net", "op": ">=", "value": 300000000}]
+    },
+    {
+      "id": "life_deal",
+      "name": "인생 물건",
+      "desc": "한 물건에서 2억 원 이상 남겼다.",
+      "flavor": "이런 건 일 년에 한 번 온다. 놓치면 다음도 일 년 뒤다.",
+      "tier": 3,
+      "cond": [{"stat": "max_net", "op": ">=", "value": 200000000}]
+    },
+    {
+      "id": "near_miss3",
+      "name": "1% 차이",
+      "desc": "실제 낙찰가의 1% 이내로 세 번 패찰했다.",
+      "flavor": "천만 원만 더 쓸걸. 그 후회가 다음 물건을 망친다.",
+      "tier": 3,
+      "cond": [{"stat": "near_miss", "op": ">=", "value": 3}]
+    },
+    {
+      "id": "rights_lost",
+      "name": "대항력 미아",
+      "desc": "대항력 판정을 다섯 번 틀렸다.",
+      "flavor": "전입이 근저당보다 하루 빨랐다. 그 하루가 보증금 전액이다.",
+      "tier": 3,
+      "cond": [{"stat": "rights_wrong", "op": ">=", "value": 5}]
+    },
+    {
+      "id": "tuition_100m",
+      "name": "1억 수업료",
+      "desc": "한 물건에서 1억 원 이상 잃었다.",
+      "flavor": "이 바닥 수업료는 후불이고, 할인도 없다.",
+      "tier": 3,
+      "cond": [{"stat": "min_net", "op": "<=", "value": -100000000}]
+    },
+
+    {
+      "id": "wins_home5",
+      "name": "실거주 전문",
+      "desc": "'내 집 마련' 물건 5건을 낙찰받았다.",
+      "flavor": "경쟁이 제일 치열한 판에서 다섯 번 이겼다.",
+      "tier": 4,
+      "cond": [{"stat": "wins_home", "op": ">=", "value": 5}]
+    },
+    {
+      "id": "wins_rent5",
+      "name": "월세 사장",
+      "desc": "'월세 받기' 물건 5건을 낙찰받았다.",
+      "flavor": "공실 한 달이 수익률 얼마를 깎는지 아는 사람.",
+      "tier": 4,
+      "cond": [{"stat": "wins_rent", "op": ">=", "value": 5}]
+    },
+    {
+      "id": "wins_land3",
+      "name": "지주",
+      "desc": "'토지 장기보유' 물건 3건을 낙찰받았다.",
+      "flavor": "명도는 없다. 대신 아무도 이 땅의 시세를 모른다.",
+      "tier": 4,
+      "cond": [{"stat": "wins_land", "op": ">=", "value": 3}]
+    },
+    {
+      "id": "wins_risky3",
+      "name": "특수물건 사냥꾼",
+      "desc": "난이도 '위험' 물건 3건을 낙찰받았다.",
+      "flavor": "유치권 신고서를 보고 웃는 사람은 둘뿐이다. 사기꾼과 고수.",
+      "tier": 4,
+      "cond": [{"stat": "wins_risky", "op": ">=", "value": 3}]
+    },
+    {
+      "id": "perfect_case",
+      "name": "완벽한 한 건",
+      "desc": "단일 물건에서 판단 점수 95점 이상을 받았다.",
+      "flavor": "조사, 분석, 재무가 한 줄로 섰다.",
+      "tier": 4,
+      "cond": [{"stat": "best_score", "op": ">=", "value": 95}]
+    },
+    {
+      "id": "sniper",
+      "name": "저격수",
+      "desc": "실제 낙찰가와 오차 1% 이내로 입찰했다.",
+      "flavor": "끝자리까지 1원 단위로 쓰는 데는 이유가 있다.",
+      "tier": 4,
+      "cond": [{"stat": "best_accuracy", "op": ">=", "value": 99}]
+    },
+    {
+      "id": "profit_1b",
+      "name": "10억 클럽",
+      "desc": "누적 순손익 10억 원을 넘겼다.",
+      "flavor": "이제 이건 취미가 아니다.",
+      "tier": 4,
+      "cond": [{"stat": "total_net", "op": ">=", "value": 1000000000}]
+    },
+    {
+      "id": "no_curse10",
+      "name": "안 사는 실력",
+      "desc": "낙찰자가 손해 봤을 물건을 열 번 피했다.",
+      "flavor": "이 판에 오래 남는 건 많이 산 사람이 아니라 안 산 사람이다.",
+      "tier": 4,
+      "cond": [{"stat": "winners_curse_avoided", "op": ">=", "value": 10}]
+    },
+
+    {
+      "id": "veteran",
+      "name": "경매 인생",
+      "desc": "물건 100건을 진행했다.",
+      "flavor": "사건번호만 봐도 그해 시장이 떠오른다.",
+      "tier": 5,
+      "cond": [{"stat": "cases_done", "op": ">=", "value": 100}]
+    },
+    {
+      "id": "legend_eye",
+      "name": "전설의 눈",
+      "desc": "30건 이상 진행하며 평균 88점을 지켰다.",
+      "flavor": "남이 얼마를 쓸지 안다는 건, 내가 얼마를 안 쓸지 안다는 뜻이다.",
+      "tier": 5,
+      "cond": [
+        {"stat": "cases_done", "op": ">=", "value": 30},
+        {"stat": "avg_score", "op": ">=", "value": 88}
+      ]
+    },
+    {
+      "id": "jackpot",
+      "name": "대박",
+      "desc": "한 물건에서 10억 원 이상 남겼다.",
+      "flavor": "이런 물건은 소문나지 않는다. 소문나면 이 값에 못 산다.",
+      "tier": 5,
+      "cond": [{"stat": "max_net", "op": ">=", "value": 1000000000}]
+    },
+    {
+      "id": "big_player",
+      "name": "큰 손",
+      "desc": "'큰 판' 물건 2건을 낙찰받았다.",
+      "flavor": "덩치가 커지면 경쟁자는 줄고, 실수의 크기는 늘어난다.",
+      "tier": 5,
+      "cond": [{"stat": "wins_big", "op": ">=", "value": 2}]
+    }
+  ]
+}
