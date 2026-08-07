@@ -47,6 +47,22 @@
 
 ---
 
+## 준비물 (저장소·백업 어디에도 없다 — 직접 설치)
+
+| | 용도 | 두는 곳 |
+|---|---|---|
+| **Godot 4.7.1** (Windows, standard) | 실행·빌드 | `tools/Godot_v4.7.1-stable_win64.exe` 및 `..._console.exe` |
+| **Godot export templates 4.7.1.stable** | exe 내보내기 | `%APPDATA%\Godot\export_templates\4.7.1.stable\` |
+| **Blender 4.5.9** (Windows) | 아트 재렌더 (없어도 게임은 돌아감) | `tools/blender-4.5.9-windows-x64/` |
+| **Python 3.12+** + `openpyxl`, `pillow` | 데이터 파이프라인 | `py -m pip install openpyxl pillow` |
+
+버전이 다르면 `.import` 캐시가 깨지거나 렌더 결과가 달라질 수 있다. 위 버전을 그대로 쓰는 걸 권한다.
+
+**즉, 이 세 가지가 모두 있어야 완전히 재현된다.**
+① 이 저장소 ② 사내 백업본(`tools_import/` 일체) ③ 위 준비물.
+
+---
+
 ## 실행
 
 ### 개발 (에디터)
@@ -66,9 +82,7 @@ taskkill /F /IM GG-Auction-Simulator.exe /T
 tools\Godot_v4.7.1-stable_win64_console.exe --headless --export-release "Windows Desktop" build\GG-Auction-Simulator.exe
 ```
 실행 중인 exe가 있으면 PCK 임베딩이 실패하므로 **반드시 먼저 종료**할 것.
-최초 1회 export templates 설치 필요 (`%APPDATA%\Godot\export_templates\4.7.1.stable\`).
-
-**엔진은 저장소에 없다.** `tools/` 아래에 Godot 4.7.1과 Blender 4.5.9를 직접 두어야 한다.
+export templates가 없으면 실패한다 (위 "준비물" 참조).
 
 ---
 
