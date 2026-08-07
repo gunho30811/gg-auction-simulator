@@ -816,14 +816,10 @@ func _ceremony(my_bid: int, passed: bool) -> void:
 	tw.tween_property(dim, "color:a", 0.08, 0.6)
 	tw.tween_property(court, "scale", Vector2(1.14, 1.14), 4.5).set_trans(Tween.TRANS_SINE)
 	_call("사건번호 %s — 개찰을 시작하겠습니다." % a["case_no"])
-	var case_voice := "res://assets/sfx/case_%d.mp3" % idx
+	# 예전엔 사건번호를 읽어주는 녹음(case_N.mp3)을 idx로 골라 틀었는데, 물건이 4,500건이 되고
+	# 매 라운드 섞이면서 화면의 사건번호와 음성이 어긋났다. 지금은 일반 개찰 멘트만 쓴다.
 	var open_wait := 1.5
-	if ResourceLoader.exists(case_voice):
-		voice_player.stream = load(case_voice)
-		voice_player.play()
-		open_wait = minf(voice_player.stream.get_length() + 0.2, 3.2)
-	else:
-		_voice("v_open")
+	_voice("v_open")
 	_say("두구두구...")
 	await _beat(open_wait)
 
