@@ -19,6 +19,9 @@ tools_import/
 # 렌더 중간산출물 (최종 PNG는 assets/art에 커밋됨)
 art_src/renders/
 
+# 사내 백업 압축본 — API 인증키·개인정보 포함. 절대 커밋 금지
+*.zip
+
 __pycache__/
 *.tmp
 
