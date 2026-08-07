@@ -66,6 +66,8 @@ func _initialize() -> void:
 	main._on_next()
 	assert(main.idx == 1, "다음 물건으로 이동")
 
+	# 종료 시 Godot이 내는 "ObjectDB instances were leaked" 경고는 실행 중인 트윈 때문이며
+	# 실제 문제가 아니다 (queue_free로 정리해도 오히려 늘어난다). 무시할 것.
 	print("SMOKE OK")
 	quit(0)
 
